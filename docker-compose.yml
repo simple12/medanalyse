@@ -1,0 +1,60 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: hapi
+      POSTGRES_USER: hapi
+      POSTGRES_PASSWORD: hapi
+    volumes:
+      - hapi_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hapi -d hapi"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  hapi-fhir:
+    image: hapiproject/hapi:latest
+    ports:
+      - "8082:8080"  # host 8082 — 8080 is often taken (e.g. Airflow)
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      spring.datasource.url: jdbc:postgresql://db:5432/hapi
+      spring.datasource.username: hapi
+      spring.datasource.password: hapi
+      spring.datasource.driverClassName: org.postgresql.Driver
+      spring.jpa.properties.hibernate.dialect: ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgresDialect
+
+  patient-app:
+    container_name: patient-app
+    image: patient-app:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3001"  # host 3002 — 3001 often used by local npm run dev
+    environment:
+      PORT: 3001
+      NODE_ENV: production
+      # Startup wait target (optional JSON overrides baseUrl). Multiplexed proxy uses per-source env vars.
+      FHIR_CONFIG_PATH: /app/config/fhir.json
+      HAPI_FHIR_BASE_URL: http://hapi-fhir:8080/fhir
+      FHIR_BASE_URL: http://hapi-fhir:8080/fhir
+      FHIR_ACCESS_TOKEN: ""
+      FHIR_WAIT: "true"
+    volumes:
+      - ./config/fhir.json:/app/config/fhir.json
+    depends_on:
+      hapi-fhir:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  hapi_pg_data:

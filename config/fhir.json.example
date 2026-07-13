@@ -1,0 +1,4 @@
+{
+  "baseUrl": "http://hapi-fhir:8080/fhir",
+  "accessToken": ""
+}

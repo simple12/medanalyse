@@ -1,0 +1,12 @@
+{
+    "json.schemas": [
+      {
+        "fileMatch": [
+          "/*.json"
+        ],
+        "url": "./fhir.schema.json"
+      }
+    ]
+}
+
+

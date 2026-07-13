@@ -1,0 +1,19 @@
+{
+  "buildCommand": "npm ci --prefix client && npm run build --prefix client",
+  "outputDirectory": "client/dist",
+  "rewrites": [
+    { "source": "/api/fhir/(.*)", "destination": "/api/fhir?__path=$1" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "functions": {
+    "api/fhir.ts": {
+      "maxDuration": 30
+    },
+    "api/auth/smart/authorize.ts": {
+      "maxDuration": 30
+    },
+    "api/auth/smart/callback.ts": {
+      "maxDuration": 30
+    }
+  }
+}

@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+.env.local
+
+# Build
+client/dist/
+server/dist/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+.vercel
+
+# Local drafts and AI workflow notes (not for version control)
+# Glob matches ignore_this_notes.txt, ignore_this-*.md, ignore_this - *.md, etc.
+ignore_this*
+shared/*.js

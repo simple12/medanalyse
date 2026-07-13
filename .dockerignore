@@ -1,0 +1,13 @@
+node_modules
+client/node_modules
+server/node_modules
+client/dist
+server/dist
+.git
+.env
+*.md
+!README.md
+.vscode
+.cursor
+ignore_this*
+PRD.md

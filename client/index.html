@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Patient Management</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      (function () {
+        var params = new URLSearchParams(location.search);
+        var iss = params.get("iss");
+        var launch = params.get("launch");
+        if (!iss || !launch) return;
+        var guardKey = "smart_ehr_launch:" + launch;
+        if (sessionStorage.getItem(guardKey)) return;
+        sessionStorage.setItem(guardKey, "1");
+        try {
+          var host = new URL(iss).hostname.toLowerCase();
+          var source = host.includes("cerner")
+            ? "cerner"
+            : host.includes("epic")
+              ? "epic"
+              : null;
+          if (!source) return;
+          var next = new URLSearchParams({
+            source: source,
+            iss: iss,
+            launch: launch,
+            redirect: "/",
+          });
+          location.replace("/api/auth/smart/authorize?" + next.toString());
+        } catch (_error) {}
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
