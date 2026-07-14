@@ -2,7 +2,7 @@
 
 **Status:** Active - Phase 1 Journeys A and C are in progress in this repo.
 Journey A (condition-control review + Patient Intelligence card) has a working deterministic engine, `/api/agent/review`, and UI on Epic/Cerner patient details.
-Journey C (`POST /api/agent/ask`) uses in-memory chart retrieval with optional LLM phrasing via the Vercel AI SDK when `OPENAI_API_KEY` is set.
+Journey C (`POST /api/agent/ask`) uses in-memory chart retrieval with optional LLM phrasing via the Vercel AI SDK when `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is set.
 Postgres/pgvector GraphRAG, Journeys B, DDInter, and CDS Hooks are not built yet.
 This document remains the source of truth; expect it to change as we iterate.
 

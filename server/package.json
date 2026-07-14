@@ -9,6 +9,7 @@
     "start": "node dist/server/src/index.js"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.14",
     "@ai-sdk/openai": "^4.0.13",
     "ai": "^7.0.26",
     "cors": "^2.8.5",

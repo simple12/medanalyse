@@ -217,7 +217,7 @@ export function PatientIntelligenceCard({
           <div className="space-y-2 border-t pt-4">
             <h3 className="text-sm font-semibold">Ask about this patient</h3>
             <p className="text-xs text-muted-foreground">
-              Answers use this patient's FHIR chart facts. LLM phrasing is optional when OpenAI is configured.
+              Answers use this patient's FHIR chart facts. LLM phrasing is optional when OpenAI or Claude is configured.
             </p>
             <form
               className="flex flex-col gap-2 sm:flex-row"
