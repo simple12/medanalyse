@@ -258,17 +258,20 @@ vercel deploy --prod
 
 ### Agent LLM provider / model (request-time; no redeploy)
 
-API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, …) stay in Vercel env and still need a redeploy when first added.
+API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, …) stay in Vercel env and still need a redeploy when first added or rotated.
 Provider and model selection do **not**: they are stored in Upstash Redis / Vercel KV and read on each ask.
+Env `LLM_PROVIDER` / `*_MODEL` are optional fallbacks when KV is empty; keep `AGENT_SETTINGS_SECRET` for PUT auth.
 
 - Spec decision: [AGENT_SPEC.md](./AGENT_SPEC.md) section 10 (request-time KV config) and section 11.
 - Operators: [TESTING.md](./TESTING.md#agent-llm-provider-no-redeploy) (`GET`/`PUT /api/agent/llm-settings`).
+- Laptop OpenAI smoke test: `python3 scripts/test_openai_key.py` (chat + embeddings).
 - Env names: [.env.example](./.env.example) (`KV_REST_API_*`, `AGENT_SETTINGS_SECRET`).
 
 ### GraphRAG (Postgres + pgvector)
 
 Ask retrieval prefers Neon Postgres (`DATABASE_URL` / `POSTGRES_URL`) with `pgvector` chunk embeddings (`OPENAI_API_KEY` + `text-embedding-3-small`).
-Without the DB, Ask falls back to in-memory FHIR context (same as before).
+That embedding key is required even when Ask phrasing uses Claude or Gemini from KV.
+Without the DB or a working OpenAI key, Ask falls back to in-memory FHIR context.
 See [AGENT_SPEC.md](./AGENT_SPEC.md) section 9 and [TESTING.md](./TESTING.md#graphrag-ask-postgres--pgvector).
 
 ---

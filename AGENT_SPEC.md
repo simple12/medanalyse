@@ -279,7 +279,8 @@ Recommendation: start with Vercel/Neon Postgres + pgvector, revisit if traversal
 
 - **Write scopes for in-app ordering.** Placing a MedicationRequest from our app needs `patient/MedicationRequest.write` (or `user/...write`) added to the Epic/Cerner SMART registration and sandbox app config, which today request read scopes only. This is a registration/config change to schedule, not a blocker for the read-only Journeys A and C.
 - **Which concrete LLM to run first.** The interface is pluggable (Vercel AI SDK) with request-time KV selection.
-  Current demo default in KV is Gemini (`gemini-3.5-flash`); swap via `/api/agent/llm-settings` without redeploy.
+  Current demo default in KV is Claude (`claude-sonnet-4-5`); swap via `/api/agent/llm-settings` without redeploy.
+  `OPENAI_API_KEY` is still required for GraphRAG embeddings even when Ask phrasing uses Claude or Gemini.
   Cost/latency tradeoffs may still change which default we prefer for demos.
 - **Guideline corpus contents.** Which specific guideline documents (ADA, AHA/ACC, JNC, etc.) we ingest for the condition-control reasoning, and their licensing/redistribution terms.
 

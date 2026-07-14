@@ -1,7 +1,6 @@
 /**
  * Builds a lightweight, citation-bearing context from FHIR resources for Journey C.
- * Full Postgres/pgvector GraphRAG is deferred; this is in-memory retrieval over the
- * same clinical payload Journey A already loads.
+ * Used as the Ask fallback when GraphRAG (Postgres + embeddings) is unavailable.
  */
 
 import {

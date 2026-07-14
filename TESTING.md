@@ -150,7 +150,10 @@ For HAPI / Medblocks:
 ## Agent LLM provider (no redeploy)
 
 API keys stay in Vercel env (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`).
+Changing or rotating a key still needs a production redeploy so serverless functions pick it up.
 Provider and model live in Upstash Redis / Vercel KV and can change without redeploying.
+Env `LLM_PROVIDER` / `*_MODEL` are optional fallbacks only when KV has no stored settings.
+Keep `AGENT_SETTINGS_SECRET`; it guards writes to `/api/agent/llm-settings`.
 
 1. Connect **Upstash for Redis** to the Vercel project (Storage marketplace) and redeploy **once** so `KV_REST_API_URL` / `KV_REST_API_TOKEN` exist.
 2. Set `AGENT_SETTINGS_SECRET` in Vercel env (redeploy once for that secret).
@@ -160,22 +163,46 @@ Provider and model live in Upstash Redis / Vercel KV and can change without rede
 curl -s https://fhir-patient-app-five.vercel.app/api/agent/llm-settings
 ```
 
-4. Switch provider/model immediately:
+4. Switch provider/model immediately (examples):
 
 ```bash
+# Claude (current demo default)
+curl -s -X PUT https://fhir-patient-app-five.vercel.app/api/agent/llm-settings \
+  -H "content-type: application/json" \
+  -H "x-agent-settings-secret: $AGENT_SETTINGS_SECRET" \
+  -d '{"provider":"anthropic","model":"claude-sonnet-4-5"}'
+
+# OpenAI
+curl -s -X PUT https://fhir-patient-app-five.vercel.app/api/agent/llm-settings \
+  -H "content-type: application/json" \
+  -H "x-agent-settings-secret: $AGENT_SETTINGS_SECRET" \
+  -d '{"provider":"openai","model":"gpt-4o-mini"}'
+
+# Gemini
 curl -s -X PUT https://fhir-patient-app-five.vercel.app/api/agent/llm-settings \
   -H "content-type: application/json" \
   -H "x-agent-settings-secret: $AGENT_SETTINGS_SECRET" \
   -d '{"provider":"gemini","model":"gemini-3.5-flash"}'
 ```
 
+5. Optional: smoke-test an OpenAI key on your laptop before updating Vercel:
+
+```bash
+export OPENAI_API_KEY='sk-...'
+python3 scripts/test_openai_key.py
+```
+
+Expect PASS for both chat (`gpt-4o-mini`) and embeddings (`text-embedding-3-small`).
+If laptop PASS but Ask still says the key was rejected, Vercel has a different/stale value - update env and `vercel deploy --prod`.
+
 ---
 
 ## GraphRAG Ask (Postgres + pgvector)
 
 1. Connect **Neon** to the Vercel project (Storage marketplace) and redeploy **once** so `DATABASE_URL` / `POSTGRES_URL` exist.
-2. Keep `OPENAI_API_KEY` set (embeddings use `text-embedding-3-small` even if Ask phrasing uses Gemini/Claude from KV).
-3. Ask a question on a patient. The answer badge shows **Retrieval: GraphRAG** when the DB path ran, or **Retrieval: in-memory** as fallback.
+2. Keep a valid `OPENAI_API_KEY` on Vercel (embeddings use `text-embedding-3-small` even if Ask phrasing uses Gemini/Claude from KV).
+3. Ask a question on a patient.
+   The answer badge shows **Retrieval: GraphRAG** when the DB path ran, or **Retrieval: in-memory** as fallback (missing DB, bad OpenAI key, or embed failure).
 4. Optional status:
 
 ```bash
