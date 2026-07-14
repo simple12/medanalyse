@@ -1,10 +1,8 @@
 /**
  * Pluggable LLM access for the agent (AGENT_SPEC.md section 11).
- * Uses the Vercel AI SDK. OpenAI is the default development adapter.
+ * Uses dynamic import() of the Vercel AI SDK so Vercel's CJS serverless wrapper
+ * does not crash with ERR_REQUIRE_ESM on top-level require("ai").
  */
-
-import { generateText } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
 
 export type LlmProviderName = "openai" | "none";
 
@@ -16,7 +14,6 @@ export function resolveLlmProvider(
   if (configured === "openai" || !configured) {
     return env.OPENAI_API_KEY?.trim() ? "openai" : "none";
   }
-  // Unknown provider names fall back to none so the route still works extractively.
   return env.OPENAI_API_KEY?.trim() && configured === "openai" ? "openai" : "none";
 }
 
@@ -33,8 +30,13 @@ export async function generateAgentAnswer(input: {
   if (!apiKey) return null;
 
   const modelName = env.OPENAI_MODEL?.trim() || "gpt-4o-mini";
-  const openai = createOpenAI({ apiKey });
 
+  const [{ generateText }, { createOpenAI }] = await Promise.all([
+    import("ai"),
+    import("@ai-sdk/openai"),
+  ]);
+
+  const openai = createOpenAI({ apiKey });
   const context = input.contextBlocks.join("\n");
   const { text } = await generateText({
     model: openai(modelName),
