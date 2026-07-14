@@ -8,6 +8,7 @@ import appConfig from "./routes/app-config.js";
 import fhirSources from "./routes/fhir-sources.js";
 import adminSmartConfig from "./routes/admin-smart-config.js";
 import smartAuth from "./routes/smart-auth.js";
+import agent from "./routes/agent.js";
 
 dotenv.config({ path: path.resolve(process.cwd(), "../.env") });
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
@@ -27,6 +28,7 @@ app.use("/api/config", appConfig);
 app.use("/api/fhir-sources", fhirSources);
 app.use("/api/auth/smart", smartAuth);
 app.use("/api/admin", adminSmartConfig);
+app.use("/api/agent", agent);
 
 if (isProduction) {
   const clientDist = path.resolve(__dirname, "../../client/dist");

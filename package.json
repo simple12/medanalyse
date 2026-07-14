@@ -14,7 +14,8 @@
     "fhir:down": "docker compose down",
     "seed:generate": "node scripts/generate-seed-bundle.mjs",
     "seed:clinical": "bash scripts/seed-clinical-data.sh",
-    "deploy:vercel": "bash scripts/deploy-vercel.sh"
+    "deploy:vercel": "bash scripts/deploy-vercel.sh",
+    "test:agent": "client/node_modules/.bin/vitest run --root . --config vitest.config.ts"
   },
   "devDependencies": {
     "@vercel/node": "^5.1.8",

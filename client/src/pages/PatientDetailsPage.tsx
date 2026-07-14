@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { ConditionsTable } from "@/components/ConditionsTable";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { MedicationsTable } from "@/components/MedicationsTable";
+import { PatientIntelligenceCard } from "@/components/PatientIntelligenceCard";
 import { VitalsSection } from "@/components/VitalsSection";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -241,6 +242,10 @@ export function PatientDetailsPage() {
           <p className="text-muted-foreground">Patient not found.</p>
         )}
       </section>
+
+      {(sourceId === "epic" || sourceId === "cerner") && patient ? (
+        <PatientIntelligenceCard patientId={id} reloadKey={sourceVersion} />
+      ) : null}
 
       {loadingVitals ? (
         <Skeleton className="h-64 w-full" />
