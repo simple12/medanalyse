@@ -15,9 +15,36 @@ export type LlmProviderName = "openai" | "anthropic" | "gemini" | "none";
 const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
 const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5";
 const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
+const GEMINI_MODEL_PATTERN = /^[a-z0-9][a-z0-9._-]*$/i;
 
 function hasOpenAI(env: NodeJS.ProcessEnv): boolean {
   return Boolean(env.OPENAI_API_KEY?.trim());
+}
+
+/**
+ * Normalize Gemini model IDs from env.
+ * Empty/quoted/`models/`-prefixed/invalid values fall back to the default
+ * so Vercel misconfig cannot produce `/models/:generateContent`.
+ */
+export function resolveGeminiModelName(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const raw = env.GEMINI_MODEL?.trim() || env.GOOGLE_MODEL?.trim() || "";
+  if (!raw) return DEFAULT_GEMINI_MODEL;
+
+  let model = raw.replace(/^["']+|["']+$/g, "").trim();
+  if (model.toLowerCase().startsWith("models/")) {
+    model = model.slice("models/".length).trim();
+  }
+  // Allow publisher paths like publishers/google/models/gemini-3.5-flash.
+  if (model.includes("/")) {
+    model = model.split("/").filter(Boolean).pop() || "";
+  }
+
+  if (!model || !GEMINI_MODEL_PATTERN.test(model)) {
+    return DEFAULT_GEMINI_MODEL;
+  }
+  return model;
 }
 
 function hasAnthropic(env: NodeJS.ProcessEnv): boolean {
@@ -124,18 +151,23 @@ export async function generateAgentAnswer(input: {
   if (provider === "gemini") {
     const apiKey = geminiApiKey(env);
     if (!apiKey) return null;
-    const modelName =
-      env.GEMINI_MODEL?.trim() ||
-      env.GOOGLE_MODEL?.trim() ||
-      DEFAULT_GEMINI_MODEL;
+    const modelName = resolveGeminiModelName(env);
     const { createGoogleGenerativeAI } = await import("@ai-sdk/google");
     const google = createGoogleGenerativeAI({ apiKey });
-    const { text } = await generateText({
-      model: google(modelName),
-      temperature: 0.2,
-      prompt,
-    });
-    return text.trim() || null;
+    // Gemini 3.x recommends omitting sampling params like temperature.
+    const omitSampling = /^gemini-3[.-]/i.test(modelName);
+    try {
+      const { text } = await generateText({
+        model: google(modelName),
+        ...(omitSampling ? {} : { temperature: 0.2 }),
+        prompt,
+      });
+      return text.trim() || null;
+    } catch (error) {
+      const detail =
+        error instanceof Error ? error.message : "Gemini request failed";
+      throw new Error(`${detail} (model=${modelName})`);
+    }
   }
 
   const apiKey = env.OPENAI_API_KEY?.trim();

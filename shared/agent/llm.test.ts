@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveLlmProvider } from "./llm.js";
+import { resolveGeminiModelName, resolveLlmProvider } from "./llm.js";
 
 describe("resolveLlmProvider", () => {
   it("uses anthropic when only ANTHROPIC_API_KEY is set", () => {
@@ -61,5 +61,35 @@ describe("resolveLlmProvider", () => {
         LLM_PROVIDER: "anthropic",
       }),
     ).toBe("none");
+  });
+});
+
+describe("resolveGeminiModelName", () => {
+  it("defaults when unset or empty", () => {
+    expect(resolveGeminiModelName({})).toBe("gemini-3.5-flash");
+    expect(resolveGeminiModelName({ GEMINI_MODEL: "" })).toBe(
+      "gemini-3.5-flash",
+    );
+    expect(resolveGeminiModelName({ GEMINI_MODEL: "   " })).toBe(
+      "gemini-3.5-flash",
+    );
+  });
+
+  it("strips models/ prefix and quotes", () => {
+    expect(
+      resolveGeminiModelName({ GEMINI_MODEL: "models/gemini-3.1-flash-lite" }),
+    ).toBe("gemini-3.1-flash-lite");
+    expect(
+      resolveGeminiModelName({ GEMINI_MODEL: '"gemini-3.5-flash"' }),
+    ).toBe("gemini-3.5-flash");
+  });
+
+  it("falls back when the value is invalid", () => {
+    expect(resolveGeminiModelName({ GEMINI_MODEL: "!!!" })).toBe(
+      "gemini-3.5-flash",
+    );
+    expect(resolveGeminiModelName({ GEMINI_MODEL: "models/" })).toBe(
+      "gemini-3.5-flash",
+    );
   });
 });
