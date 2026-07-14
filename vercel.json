@@ -15,10 +15,7 @@
     "api/auth/smart/callback.ts": {
       "maxDuration": 30
     },
-    "api/agent/review.ts": {
-      "maxDuration": 60
-    },
-    "api/agent/ask.ts": {
+    "api/agent/[action].ts": {
       "maxDuration": 60
     }
   }

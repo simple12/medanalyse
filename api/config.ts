@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getResolvedConnection } from "./lib/resolve-fhir-connection.js";
+import { getResolvedConnection } from "../shared/vercel-resolve-fhir-connection.js";
 
 export default function handler(req: VercelRequest, res: VercelResponse): void {
   try {

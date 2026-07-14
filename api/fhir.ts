@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { buffer } from "node:stream/consumers";
-import { getResolvedConnection } from "./lib/resolve-fhir-connection.js";
+import { getResolvedConnection } from "../shared/vercel-resolve-fhir-connection.js";
 
 function extractFhirPath(req: VercelRequest): string {
   const routed = req.query.__path;

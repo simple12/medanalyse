@@ -5,8 +5,8 @@ import {
   readSourceIdFromRequest,
   resolveConnection,
   type ResolvedFhirConnection,
-} from "../../shared/fhir-sources.js";
-import { getSmartAccessToken, readSmartSession } from "../../shared/smart-session.js";
+} from "./fhir-sources.js";
+import { getSmartAccessToken, readSmartSession } from "./smart-session.js";
 
 export function getActiveSourceId(req: VercelRequest): string | undefined {
   return readSourceIdFromRequest(req.headers, req.headers.cookie as string | undefined);
