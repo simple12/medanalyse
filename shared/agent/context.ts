@@ -22,6 +22,59 @@ export interface ContextChunk {
   tokens: string[];
 }
 
+const TOKEN_SYNONYMS: Record<string, string[]> = {
+  medication: ["medication", "medications", "med", "meds", "drug", "drugs", "rx", "prescription", "prescribed"],
+  medications: ["medication", "medications", "med", "meds", "drug", "drugs", "rx", "prescription", "prescribed"],
+  med: ["medication", "medications", "med", "meds", "drug", "drugs"],
+  meds: ["medication", "medications", "med", "meds", "drug", "drugs"],
+  drug: ["medication", "medications", "drug", "drugs", "rx"],
+  drugs: ["medication", "medications", "drug", "drugs", "rx"],
+  prescription: ["medication", "medications", "prescription", "prescribed", "rx"],
+  prescribed: ["medication", "medications", "prescription", "prescribed", "rx"],
+  condition: ["condition", "conditions", "diagnosis", "diagnoses", "problem"],
+  conditions: ["condition", "conditions", "diagnosis", "diagnoses", "problem"],
+  diagnosis: ["condition", "conditions", "diagnosis", "diagnoses"],
+  vital: ["vital", "vitals", "observation", "observations", "bp", "pressure"],
+  vitals: ["vital", "vitals", "observation", "observations", "bp", "pressure"],
+  pressure: ["pressure", "blood", "bp", "systolic", "diastolic"],
+  bp: ["pressure", "blood", "bp", "systolic", "diastolic"],
+};
+
+const MED_INTENT = new Set([
+  "medication",
+  "medications",
+  "med",
+  "meds",
+  "drug",
+  "drugs",
+  "rx",
+  "prescription",
+  "prescribed",
+]);
+
+const CONDITION_INTENT = new Set([
+  "condition",
+  "conditions",
+  "diagnosis",
+  "diagnoses",
+  "problem",
+  "problems",
+]);
+
+const VITAL_INTENT = new Set([
+  "vital",
+  "vitals",
+  "observation",
+  "observations",
+  "lab",
+  "labs",
+  "blood",
+  "pressure",
+  "bp",
+  "a1c",
+  "hba1c",
+]);
+
 function tokenize(text: string): string[] {
   return text
     .toLowerCase()
@@ -29,18 +82,31 @@ function tokenize(text: string): string[] {
     .filter((token) => token.length > 1);
 }
 
+function expandTokens(tokens: Iterable<string>): Set<string> {
+  const expanded = new Set<string>();
+  for (const token of tokens) {
+    expanded.add(token);
+    for (const synonym of TOKEN_SYNONYMS[token] ?? []) {
+      expanded.add(synonym);
+    }
+  }
+  return expanded;
+}
+
 function chunk(
   resourceType: string,
   resourceId: string | undefined,
   text: string,
   index: number,
+  extraTokens: string[] = [],
 ): ContextChunk {
+  const tokens = new Set([...tokenize(text), ...extraTokens.map((t) => t.toLowerCase())]);
   return {
     id: `${resourceType}:${resourceId ?? index}`,
     resourceType,
     resourceId,
     text,
-    tokens: tokenize(text),
+    tokens: [...tokens],
   };
 }
 
@@ -86,6 +152,7 @@ export function buildContextChunks(input: {
         condition.id,
         `Condition: ${name}. Clinical status: ${status}.`,
         index,
+        ["condition", "diagnosis", "problem"],
       ),
     );
   });
@@ -98,8 +165,9 @@ export function buildContextChunks(input: {
       chunk(
         "MedicationRequest",
         med.id,
-        `MedicationRequest: ${name}. Status: ${status}. Authored: ${authored}.`,
+        `Medication: ${name}. Status: ${status}. Authored: ${authored}.`,
         index,
+        ["medication", "medications", "med", "meds", "drug", "drugs", "rx", "prescription"],
       ),
     );
   });
@@ -107,7 +175,14 @@ export function buildContextChunks(input: {
   input.observations.forEach((obs, index) => {
     const summary = observationSummary(obs);
     if (!summary) return;
-    chunks.push(chunk("Observation", obs.id, summary, index));
+    chunks.push(
+      chunk("Observation", obs.id, summary, index, [
+        "observation",
+        "vital",
+        "vitals",
+        "lab",
+      ]),
+    );
   });
 
   input.assessments.forEach((assessment, index) => {
@@ -117,6 +192,7 @@ export function buildContextChunks(input: {
         assessment.conditionId,
         `Condition-control assessment for ${assessment.conditionName}: ${assessment.status}. ${assessment.rationale}`,
         index,
+        ["condition", "assessment", "control"],
       ),
     );
   });
@@ -124,17 +200,53 @@ export function buildContextChunks(input: {
   return chunks;
 }
 
-/** Score chunks by overlapping question tokens; return topK with citations. */
+function detectIntent(questionTokens: Set<string>): {
+  prefersMeds: boolean;
+  prefersConditions: boolean;
+  prefersVitals: boolean;
+} {
+  let prefersMeds = false;
+  let prefersConditions = false;
+  let prefersVitals = false;
+  for (const token of questionTokens) {
+    if (MED_INTENT.has(token)) prefersMeds = true;
+    if (CONDITION_INTENT.has(token)) prefersConditions = true;
+    if (VITAL_INTENT.has(token)) prefersVitals = true;
+  }
+  return { prefersMeds, prefersConditions, prefersVitals };
+}
+
+function intentBoost(
+  resourceType: string,
+  intent: ReturnType<typeof detectIntent>,
+): number {
+  if (intent.prefersMeds && resourceType === "MedicationRequest") return 8;
+  if (intent.prefersConditions && (resourceType === "Condition" || resourceType === "ConditionAssessment")) {
+    return 6;
+  }
+  if (intent.prefersVitals && resourceType === "Observation") return 6;
+  // When the question clearly asks for meds, demote observations so BP noise loses.
+  if (intent.prefersMeds && !intent.prefersVitals && resourceType === "Observation") {
+    return -4;
+  }
+  return 0;
+}
+
+/** Score chunks by overlapping question tokens plus intent boosts. */
 export function retrieveRelevantChunks(
   question: string,
   chunks: ContextChunk[],
   topK = 8,
 ): { chunks: ContextChunk[]; citations: AskCitation[] } {
-  const qTokens = new Set(tokenize(question));
+  const rawTokens = tokenize(question);
+  const qTokens = expandTokens(rawTokens);
+  const intent = detectIntent(qTokens);
+
   const scored = chunks
     .map((item) => {
-      let score = 0;
-      for (const token of item.tokens) {
+      let score = intentBoost(item.resourceType, intent);
+      const itemTokens = expandTokens(item.tokens);
+      for (const token of itemTokens) {
         if (qTokens.has(token)) score += 1;
       }
       return { item, score };
@@ -142,10 +254,18 @@ export function retrieveRelevantChunks(
     .filter((row) => row.score > 0)
     .sort((a, b) => b.score - a.score);
 
-  const selected =
+  let selected =
     scored.length > 0
       ? scored.slice(0, topK).map((row) => row.item)
       : chunks.slice(0, Math.min(topK, chunks.length));
+
+  // Strong med intent: if we have medication chunks, prefer them exclusively when available.
+  if (intent.prefersMeds && !intent.prefersVitals) {
+    const medChunks = chunks.filter((c) => c.resourceType === "MedicationRequest");
+    if (medChunks.length > 0) {
+      selected = medChunks.slice(0, topK);
+    }
+  }
 
   const citations: AskCitation[] = selected.map((item) => ({
     resourceType: item.resourceType,

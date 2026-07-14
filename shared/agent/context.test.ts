@@ -62,4 +62,21 @@ describe("context retrieval", () => {
       ),
     ).toBe(true);
   });
+
+  it("returns medication chunks for medication questions", () => {
+    const chunks = buildContextChunks({
+      conditions,
+      medications,
+      observations,
+      assessments: [],
+    });
+    const { citations } = retrieveRelevantChunks(
+      "what medications is this patient on",
+      chunks,
+      5,
+    );
+    expect(citations.length).toBeGreaterThan(0);
+    expect(citations.every((c) => c.resourceType === "MedicationRequest")).toBe(true);
+    expect(citations[0].excerpt.toLowerCase()).toContain("lisinopril");
+  });
 });

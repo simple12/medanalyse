@@ -24,10 +24,18 @@ function buildExtractiveAnswer(
   }
 
   return [
-    `Based on the patient's chart facts (extractive answer; no LLM configured):`,
+    "Based on the patient's chart facts (extractive answer; no LLM configured):",
     ...excerpts.map((excerpt) => `- ${excerpt}`),
-    "Configure OPENAI_API_KEY to enable natural-language answers over the same citations.",
+    "Set a valid OPENAI_API_KEY on Vercel to enable natural-language answers over the same citations.",
   ].join("\n");
+}
+
+function sanitizeLlmError(message: string): string {
+  // Avoid leaking key material or long provider URLs into the UI.
+  if (/incorrect api key|invalid_api_key|unauthorized/i.test(message)) {
+    return "OpenAI rejected the configured API key. Update OPENAI_API_KEY in Vercel env vars.";
+  }
+  return message.replace(/sk-[a-zA-Z0-9_-]+/g, "[redacted]").slice(0, 180);
 }
 
 export async function runPatientAsk(
@@ -76,7 +84,9 @@ export async function runPatientAsk(
     }
   } catch (error) {
     // Fall back to extractive so the UI still works if the provider errors.
-    const detail = error instanceof Error ? error.message : "LLM call failed";
+    const detail = sanitizeLlmError(
+      error instanceof Error ? error.message : "LLM call failed",
+    );
     answer = `${answer}\n\n(LLM unavailable: ${detail})`;
   }
 
