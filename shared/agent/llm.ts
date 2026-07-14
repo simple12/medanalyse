@@ -25,6 +25,13 @@ const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5";
 const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
 const GEMINI_MODEL_PATTERN = /^[a-z0-9][a-z0-9._-]*$/i;
 
+/** AI SDK defaults to 2 retries (3 total attempts). Keep at 0 to avoid burning quota on overload. */
+const LLM_MAX_RETRIES = 0;
+/** Cap completion size for ask phrasing. */
+const LLM_MAX_OUTPUT_TOKENS = 350;
+/** Cap prompt size so chart dumps do not inflate input tokens. */
+const LLM_MAX_CONTEXT_CHARS = 4_500;
+
 function hasOpenAI(env: NodeJS.ProcessEnv): boolean {
   return Boolean(env.OPENAI_API_KEY?.trim());
 }
@@ -134,7 +141,11 @@ export async function generateAgentAnswer(input: {
   if (provider === "none") return null;
 
   const { generateText } = await import("ai");
-  const context = input.contextBlocks.join("\n");
+  const contextRaw = input.contextBlocks.join("\n");
+  const context =
+    contextRaw.length > LLM_MAX_CONTEXT_CHARS
+      ? `${contextRaw.slice(0, LLM_MAX_CONTEXT_CHARS)}\n[context truncated]`
+      : contextRaw;
   const prompt = [
     ...SYSTEM_PROMPT_PREFIX,
     "",
@@ -153,6 +164,8 @@ export async function generateAgentAnswer(input: {
     const { text } = await generateText({
       model: anthropic(modelName),
       temperature: 0.2,
+      maxRetries: LLM_MAX_RETRIES,
+      maxOutputTokens: LLM_MAX_OUTPUT_TOKENS,
       prompt,
     });
     return text.trim() || null;
@@ -170,6 +183,8 @@ export async function generateAgentAnswer(input: {
       const { text } = await generateText({
         model: google(modelName),
         ...(omitSampling ? {} : { temperature: 0.2 }),
+        maxRetries: LLM_MAX_RETRIES,
+        maxOutputTokens: LLM_MAX_OUTPUT_TOKENS,
         prompt,
       });
       return text.trim() || null;
@@ -188,6 +203,8 @@ export async function generateAgentAnswer(input: {
   const { text } = await generateText({
     model: openai(modelName),
     temperature: 0.2,
+    maxRetries: LLM_MAX_RETRIES,
+    maxOutputTokens: LLM_MAX_OUTPUT_TOKENS,
     prompt,
   });
   return text.trim() || null;

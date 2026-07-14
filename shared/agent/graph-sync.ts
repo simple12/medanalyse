@@ -16,7 +16,9 @@ import {
 } from "./fhir.js";
 import type { ConditionAssessment } from "./types.js";
 
-export const GRAPH_SYNC_STALE_MS = 15 * 60 * 1000;
+export const GRAPH_SYNC_STALE_MS = 60 * 60 * 1000;
+/** Cap Observation chunks in the graph to limit embedding spend. */
+const MAX_OBSERVATION_CHUNKS = 12;
 
 export interface GraphSyncInput {
   sourceId: string;
@@ -205,12 +207,18 @@ export function planPatientGraph(input: GraphSyncInput): {
     }
   }
 
-  const chunks = buildContextChunks({
+  const chunksRaw = buildContextChunks({
     conditions: input.conditions,
     observations: input.observations,
     medications: input.medications,
     assessments: input.assessments,
   });
+  const observationChunks = chunksRaw.filter((c) => c.resourceType === "Observation");
+  const otherChunks = chunksRaw.filter((c) => c.resourceType !== "Observation");
+  const chunks = [
+    ...otherChunks,
+    ...observationChunks.slice(0, MAX_OBSERVATION_CHUNKS),
+  ];
 
   return { nodes, edges, chunks };
 }
@@ -291,10 +299,45 @@ export async function syncPatientGraph(
   }
 
   const planned = planPatientGraph(input);
-  const embeddings = await embedTexts(
-    planned.chunks.map((chunk) => chunk.text),
-    env,
+
+  // Reuse embeddings when chunk text is unchanged (avoid re-embedding the whole chart).
+  const existingRows = (await sql`
+    SELECT resource_type, resource_id, text, embedding::text AS embedding
+    FROM kg_chunks
+    WHERE source_id = ${input.sourceId} AND patient_id = ${input.patientId}
+  `) as Array<{
+    resource_type: string;
+    resource_id: string;
+    text: string;
+    embedding: string | null;
+  }>;
+  const existingByKey = new Map(
+    existingRows.map((row) => [
+      `${row.resource_type}:${row.resource_id}`,
+      row,
+    ]),
   );
+
+  const textsToEmbed: string[] = [];
+  const embedIndexes: number[] = [];
+  const resolvedEmbeddings: Array<number[] | null> = planned.chunks.map(
+    (chunk, index) => {
+      const key = `${chunk.resourceType}:${chunk.resourceId ?? ""}`;
+      const prior = existingByKey.get(key);
+      if (prior?.text === chunk.text && prior.embedding) {
+        // Keep as null sentinel and copy literal later from prior.embedding string.
+        return null;
+      }
+      embedIndexes.push(index);
+      textsToEmbed.push(chunk.text);
+      return null;
+    },
+  );
+
+  const freshEmbeddings = await embedTexts(textsToEmbed, env);
+  embedIndexes.forEach((chunkIndex, i) => {
+    resolvedEmbeddings[chunkIndex] = freshEmbeddings[i] ?? [];
+  });
 
   // Replace patient subgraph atomically enough for MVP (delete then insert).
   await sql`
@@ -344,8 +387,23 @@ export async function syncPatientGraph(
 
   for (let i = 0; i < planned.chunks.length; i++) {
     const chunk = planned.chunks[i]!;
-    const embedding = embeddings[i] ?? [];
-    const vector = toVectorLiteral(embedding);
+    const key = `${chunk.resourceType}:${chunk.resourceId ?? ""}`;
+    const prior = existingByKey.get(key);
+    const vector =
+      resolvedEmbeddings[i] != null
+        ? toVectorLiteral(resolvedEmbeddings[i]!)
+        : prior?.embedding
+          ? prior.embedding.startsWith("[")
+            ? prior.embedding
+            : toVectorLiteral(
+                // neon may return "{1,2,3}" style; normalize
+                prior.embedding
+                  .replace(/[{}]/g, "")
+                  .split(",")
+                  .map((part) => Number(part.trim()))
+                  .filter((n) => Number.isFinite(n)),
+              )
+          : toVectorLiteral([]);
     const chunkId = `${input.sourceId}:${input.patientId}:chunk:${chunk.id}`;
     const nodeRef =
       chunk.resourceId != null

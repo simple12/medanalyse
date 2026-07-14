@@ -183,6 +183,10 @@ curl -s "https://fhir-patient-app-five.vercel.app/api/agent/graph-status?patient
   -H "Cookie: <smart-session>"
 ```
 
+Token notes: LLM and embedding calls use `maxRetries: 0` (no triple retry on overload).
+Graph sync is at most hourly per patient and re-embeds only chunks whose text changed.
+Ask prompts truncate chart context (~4.5k chars) and cap completion tokens.
+
 ---
 
 ## Journey B1 interaction check (in-app order draft)

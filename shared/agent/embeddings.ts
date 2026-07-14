@@ -8,6 +8,9 @@
 export const EMBEDDING_MODEL_ID = "text-embedding-3-small";
 export const EMBEDDING_DIMENSIONS = 1536;
 
+/** Do not auto-retry embedding calls (avoids burning tokens on transient failures). */
+export const EMBEDDING_MAX_RETRIES = 0;
+
 export function canEmbed(env: NodeJS.ProcessEnv = process.env): boolean {
   return Boolean(env.OPENAI_API_KEY?.trim());
 }
@@ -28,7 +31,11 @@ export async function embedText(
 ): Promise<number[]> {
   const { embed } = await import("ai");
   const model = await openAiEmbeddingModel(env);
-  const { embedding } = await embed({ model, value: text });
+  const { embedding } = await embed({
+    model,
+    value: text,
+    maxRetries: EMBEDDING_MAX_RETRIES,
+  });
   return embedding;
 }
 
@@ -39,7 +46,11 @@ export async function embedTexts(
   if (texts.length === 0) return [];
   const { embedMany } = await import("ai");
   const model = await openAiEmbeddingModel(env);
-  const { embeddings } = await embedMany({ model, values: texts });
+  const { embeddings } = await embedMany({
+    model,
+    values: texts,
+    maxRetries: EMBEDDING_MAX_RETRIES,
+  });
   return embeddings;
 }
 

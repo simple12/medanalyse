@@ -57,9 +57,9 @@ describe("isSyncStale", () => {
     expect(isSyncStale(undefined)).toBe(true);
   });
 
-  it("uses the 15 minute window", () => {
+  it("uses the stale window", () => {
     const now = Date.UTC(2026, 6, 14, 12, 0, 0);
     expect(isSyncStale(new Date(now - 10 * 60 * 1000), now)).toBe(false);
-    expect(isSyncStale(new Date(now - 20 * 60 * 1000), now)).toBe(true);
+    expect(isSyncStale(new Date(now - 70 * 60 * 1000), now)).toBe(true);
   });
 });
