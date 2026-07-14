@@ -7,14 +7,14 @@
  * - openai (OPENAI_API_KEY, optional OPENAI_MODEL, default gpt-4o-mini)
  * - anthropic / claude (ANTHROPIC_API_KEY, optional ANTHROPIC_MODEL, default claude-sonnet-4-5)
  * - gemini / google (GOOGLE_GENERATIVE_AI_API_KEY or GEMINI_API_KEY, optional
- *   GEMINI_MODEL / GOOGLE_MODEL, default gemini-2.5-flash)
+ *   GEMINI_MODEL / GOOGLE_MODEL, default gemini-3.5-flash)
  */
 
 export type LlmProviderName = "openai" | "anthropic" | "gemini" | "none";
 
 const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
 const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5";
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
 
 function hasOpenAI(env: NodeJS.ProcessEnv): boolean {
   return Boolean(env.OPENAI_API_KEY?.trim());
