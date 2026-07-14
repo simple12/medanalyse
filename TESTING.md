@@ -147,6 +147,30 @@ For HAPI / Medblocks:
 
 ---
 
+## Agent LLM provider (no redeploy)
+
+API keys stay in Vercel env (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`).
+Provider and model live in Upstash Redis / Vercel KV and can change without redeploying.
+
+1. Connect **Upstash for Redis** to the Vercel project (Storage marketplace) and redeploy **once** so `KV_REST_API_URL` / `KV_REST_API_TOKEN` exist.
+2. Set `AGENT_SETTINGS_SECRET` in Vercel env (redeploy once for that secret).
+3. Read current settings:
+
+```bash
+curl -s https://fhir-patient-app-five.vercel.app/api/agent/llm-settings
+```
+
+4. Switch provider/model immediately:
+
+```bash
+curl -s -X PUT https://fhir-patient-app-five.vercel.app/api/agent/llm-settings \
+  -H "content-type: application/json" \
+  -H "x-agent-settings-secret: $AGENT_SETTINGS_SECRET" \
+  -d '{"provider":"gemini","model":"gemini-3.5-flash"}'
+```
+
+---
+
 ## Reporting issues
 
 Include:

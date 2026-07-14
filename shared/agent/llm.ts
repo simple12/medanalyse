@@ -8,7 +8,15 @@
  * - anthropic / claude (ANTHROPIC_API_KEY, optional ANTHROPIC_MODEL, default claude-sonnet-4-5)
  * - gemini / google (GOOGLE_GENERATIVE_AI_API_KEY or GEMINI_API_KEY, optional
  *   GEMINI_MODEL / GOOGLE_MODEL, default gemini-3.5-flash)
+ *
+ * Runtime selection: provider + model may be stored in Vercel KV / Upstash Redis
+ * (see llm-settings.ts). API keys remain in env; KV changes do not need a redeploy.
  */
+
+import {
+  applyLlmSettingsToEnv,
+  loadLlmSettings,
+} from "./llm-settings.js";
 
 export type LlmProviderName = "openai" | "anthropic" | "gemini" | "none";
 
@@ -119,7 +127,9 @@ export async function generateAgentAnswer(input: {
   contextBlocks: string[];
   env?: NodeJS.ProcessEnv;
 }): Promise<string | null> {
-  const env = input.env ?? process.env;
+  const baseEnv = input.env ?? process.env;
+  const stored = await loadLlmSettings(baseEnv);
+  const env = applyLlmSettingsToEnv(baseEnv, stored);
   const provider = resolveLlmProvider(env);
   if (provider === "none") return null;
 

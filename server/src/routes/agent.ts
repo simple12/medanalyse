@@ -79,4 +79,88 @@ router.post("/ask", async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+function readSettingsSecret(req: Request): string | undefined {
+  const header = req.header("x-agent-settings-secret");
+  if (header?.trim()) return header.trim();
+  const auth = req.header("authorization");
+  if (auth && auth.toLowerCase().startsWith("bearer ")) {
+    return auth.slice(7).trim() || undefined;
+  }
+  return undefined;
+}
+
+router.get("/llm-settings", async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const { resolveLlmProvider } = await import("../../../shared/agent/llm.js");
+    const {
+      loadLlmSettings,
+      resolveEffectiveLlmSettings,
+    } = await import("../../../shared/agent/llm-settings.js");
+    const effective = await resolveEffectiveLlmSettings(
+      process.env,
+      resolveLlmProvider,
+    );
+    const stored = await loadLlmSettings(process.env);
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).json({ ...effective, stored });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to load LLM settings";
+    res.status(500).json({ error: message });
+  }
+});
+
+router.put("/llm-settings", async (req: Request, res: Response): Promise<void> => {
+  await writeLlmSettings(req, res);
+});
+
+router.post("/llm-settings", async (req: Request, res: Response): Promise<void> => {
+  await writeLlmSettings(req, res);
+});
+
+async function writeLlmSettings(req: Request, res: Response): Promise<void> {
+  try {
+    const {
+      authorizeSettingsWrite,
+      isKvConfigured,
+      normalizeLlmSettingsInput,
+      resolveEffectiveLlmSettings,
+      saveLlmSettings,
+    } = await import("../../../shared/agent/llm-settings.js");
+    const { resolveLlmProvider } = await import("../../../shared/agent/llm.js");
+
+    if (!authorizeSettingsWrite(process.env, readSettingsSecret(req))) {
+      res.status(401).json({
+        error:
+          "Unauthorized. Set AGENT_SETTINGS_SECRET and pass it as x-agent-settings-secret or Authorization: Bearer.",
+      });
+      return;
+    }
+    if (!isKvConfigured(process.env)) {
+      res.status(503).json({
+        error:
+          "Vercel KV / Upstash Redis is not configured. Connect Upstash Redis to this project and redeploy once so KV credentials are present.",
+      });
+      return;
+    }
+
+    const normalized = normalizeLlmSettingsInput(req.body ?? {});
+    const stored = await saveLlmSettings(normalized, process.env);
+    const effective = await resolveEffectiveLlmSettings(
+      process.env,
+      resolveLlmProvider,
+    );
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).json({ stored, effective });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to save LLM settings";
+    const status =
+      message.includes("provider must") || message.includes("model must")
+        ? 400
+        : 500;
+    res.status(status).json({ error: message });
+  }
+}
+
 export default router;
