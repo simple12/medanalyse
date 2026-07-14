@@ -1,7 +1,8 @@
 /**
  * Journey C: ask a question about this patient (AGENT_SPEC.md).
  * MVP uses in-memory retrieval over FHIR + condition assessments.
- * Optional LLM phrasing via Vercel AI SDK when OPENAI_API_KEY or ANTHROPIC_API_KEY is set.
+ * Optional LLM phrasing via Vercel AI SDK when OPENAI_API_KEY, ANTHROPIC_API_KEY,
+ * or GEMINI_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY is set.
  * Postgres/pgvector GraphRAG is deferred.
  */
 
@@ -26,14 +27,14 @@ function buildExtractiveAnswer(
   return [
     "Based on the patient's chart facts (extractive answer; no LLM configured):",
     ...excerpts.map((excerpt) => `- ${excerpt}`),
-    "Set OPENAI_API_KEY or ANTHROPIC_API_KEY on Vercel to enable natural-language answers over the same citations.",
+    "Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY on Vercel to enable natural-language answers over the same citations.",
   ].join("\n");
 }
 
 function sanitizeLlmError(message: string): string {
   // Avoid leaking key material or long provider URLs into the UI.
-  if (/incorrect api key|invalid_api_key|unauthorized|authentication/i.test(message)) {
-    return "The configured LLM API key was rejected. Check OPENAI_API_KEY or ANTHROPIC_API_KEY in Vercel env vars.";
+  if (/incorrect api key|invalid_api_key|unauthorized|authentication|api key not valid/i.test(message)) {
+    return "The configured LLM API key was rejected. Check OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY in Vercel env vars.";
   }
   return message.replace(/sk-(?:ant-)?[a-zA-Z0-9_-]+/g, "[redacted]").slice(0, 180);
 }

@@ -18,6 +18,14 @@ describe("resolveLlmProvider", () => {
     ).toBe("openai");
   });
 
+  it("uses gemini when only GEMINI_API_KEY is set", () => {
+    expect(
+      resolveLlmProvider({
+        GEMINI_API_KEY: "gemini-test",
+      }),
+    ).toBe("gemini");
+  });
+
   it("honors LLM_PROVIDER=anthropic / claude", () => {
     expect(
       resolveLlmProvider({
@@ -26,6 +34,25 @@ describe("resolveLlmProvider", () => {
         OPENAI_API_KEY: "sk-test",
       }),
     ).toBe("anthropic");
+  });
+
+  it("honors LLM_PROVIDER=gemini even when other keys exist", () => {
+    expect(
+      resolveLlmProvider({
+        LLM_PROVIDER: "gemini",
+        GEMINI_API_KEY: "gemini-test",
+        OPENAI_API_KEY: "sk-test",
+        ANTHROPIC_API_KEY: "sk-ant-test",
+      }),
+    ).toBe("gemini");
+  });
+
+  it("returns none when gemini is requested without a key", () => {
+    expect(
+      resolveLlmProvider({
+        LLM_PROVIDER: "gemini",
+      }),
+    ).toBe("none");
   });
 
   it("returns none when anthropic is requested without a key", () => {

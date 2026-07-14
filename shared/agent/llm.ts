@@ -6,41 +6,86 @@
  * Providers:
  * - openai (OPENAI_API_KEY, optional OPENAI_MODEL, default gpt-4o-mini)
  * - anthropic / claude (ANTHROPIC_API_KEY, optional ANTHROPIC_MODEL, default claude-sonnet-4-5)
+ * - gemini / google (GOOGLE_GENERATIVE_AI_API_KEY or GEMINI_API_KEY, optional
+ *   GEMINI_MODEL / GOOGLE_MODEL, default gemini-2.5-flash)
  */
 
-export type LlmProviderName = "openai" | "anthropic" | "none";
+export type LlmProviderName = "openai" | "anthropic" | "gemini" | "none";
 
 const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
 const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5";
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+
+function hasOpenAI(env: NodeJS.ProcessEnv): boolean {
+  return Boolean(env.OPENAI_API_KEY?.trim());
+}
+
+function hasAnthropic(env: NodeJS.ProcessEnv): boolean {
+  return Boolean(env.ANTHROPIC_API_KEY?.trim());
+}
+
+function geminiApiKey(env: NodeJS.ProcessEnv): string | undefined {
+  return (
+    env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ||
+    env.GEMINI_API_KEY?.trim() ||
+    env.GOOGLE_API_KEY?.trim() ||
+    undefined
+  );
+}
+
+function hasGemini(env: NodeJS.ProcessEnv): boolean {
+  return Boolean(geminiApiKey(env));
+}
 
 export function resolveLlmProvider(
   env: NodeJS.ProcessEnv = process.env,
 ): LlmProviderName {
   const configured = env.LLM_PROVIDER?.trim().toLowerCase();
-  const hasOpenAI = Boolean(env.OPENAI_API_KEY?.trim());
-  const hasAnthropic = Boolean(env.ANTHROPIC_API_KEY?.trim());
 
   if (configured === "none") return "none";
 
   if (configured === "anthropic" || configured === "claude") {
-    return hasAnthropic ? "anthropic" : "none";
+    return hasAnthropic(env) ? "anthropic" : "none";
+  }
+
+  if (configured === "gemini" || configured === "google") {
+    return hasGemini(env) ? "gemini" : "none";
   }
 
   if (configured === "openai") {
-    return hasOpenAI ? "openai" : "none";
+    return hasOpenAI(env) ? "openai" : "none";
   }
 
-  // Auto-detect when LLM_PROVIDER is unset: prefer explicitly present keys.
-  // If both are set, prefer Anthropic only when OPENAI is absent? Prefer OpenAI
-  // for backward compatibility when both exist; Anthropic when only Anthropic is set.
+  // Auto-detect when LLM_PROVIDER is unset.
+  // Prefer the single present provider; if several exist, keep OpenAI then Anthropic then Gemini.
   if (!configured) {
-    if (hasAnthropic && !hasOpenAI) return "anthropic";
-    if (hasOpenAI) return "openai";
+    const openai = hasOpenAI(env);
+    const anthropic = hasAnthropic(env);
+    const gemini = hasGemini(env);
+    const count = Number(openai) + Number(anthropic) + Number(gemini);
+    if (count === 1) {
+      if (openai) return "openai";
+      if (anthropic) return "anthropic";
+      if (gemini) return "gemini";
+    }
+    if (openai) return "openai";
+    if (anthropic) return "anthropic";
+    if (gemini) return "gemini";
     return "none";
   }
 
   return "none";
 }
+
+const SYSTEM_PROMPT_PREFIX = [
+  "You are a clinical decision-support assistant for a FHIR patient chart demo.",
+  "Answer only from the provided patient context.",
+  "If the context is insufficient, say what is missing.",
+  "Do not invent labs, meds, or diagnoses.",
+  "Cite concrete facts from the context (values and dates when present).",
+  "Keep the answer concise (under 180 words).",
+  "Remind the clinician this is decision support only.",
+];
 
 export async function generateAgentAnswer(input: {
   question: string;
@@ -54,13 +99,7 @@ export async function generateAgentAnswer(input: {
   const { generateText } = await import("ai");
   const context = input.contextBlocks.join("\n");
   const prompt = [
-    "You are a clinical decision-support assistant for a FHIR patient chart demo.",
-    "Answer only from the provided patient context.",
-    "If the context is insufficient, say what is missing.",
-    "Do not invent labs, meds, or diagnoses.",
-    "Cite concrete facts from the context (values and dates when present).",
-    "Keep the answer concise (under 180 words).",
-    "Remind the clinician this is decision support only.",
+    ...SYSTEM_PROMPT_PREFIX,
     "",
     "Patient context:",
     context,
@@ -76,6 +115,23 @@ export async function generateAgentAnswer(input: {
     const anthropic = createAnthropic({ apiKey });
     const { text } = await generateText({
       model: anthropic(modelName),
+      temperature: 0.2,
+      prompt,
+    });
+    return text.trim() || null;
+  }
+
+  if (provider === "gemini") {
+    const apiKey = geminiApiKey(env);
+    if (!apiKey) return null;
+    const modelName =
+      env.GEMINI_MODEL?.trim() ||
+      env.GOOGLE_MODEL?.trim() ||
+      DEFAULT_GEMINI_MODEL;
+    const { createGoogleGenerativeAI } = await import("@ai-sdk/google");
+    const google = createGoogleGenerativeAI({ apiKey });
+    const { text } = await generateText({
+      model: google(modelName),
       temperature: 0.2,
       prompt,
     });
