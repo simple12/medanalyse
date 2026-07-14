@@ -104,3 +104,11 @@ export function isActiveCondition(condition: FhirCondition): boolean {
   if (!status) return true;
   return !["resolved", "inactive", "remission", "entered-in-error"].includes(status);
 }
+
+export function medicationNameFromRequest(med: FhirMedicationRequest): string {
+  return (
+    conceptLabel(med.medicationCodeableConcept) ??
+    med.medicationReference?.display?.trim() ??
+    "Unknown medication"
+  );
+}

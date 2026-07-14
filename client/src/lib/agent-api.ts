@@ -1,4 +1,4 @@
-import type { ReviewResult } from "@/types/agent";
+import type { AskResult, ReviewResult } from "@/types/agent";
 import { getActiveFhirSourceId } from "@/lib/fhir-source-storage";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
@@ -22,15 +22,20 @@ async function parseError(response: Response): Promise<string> {
   return `Agent request failed (${response.status})`;
 }
 
+function agentHeaders(): HeadersInit {
+  const sourceId = getActiveFhirSourceId();
+  return {
+    "Content-Type": "application/json",
+    ...(sourceId ? { "X-FHIR-Source": sourceId } : {}),
+  };
+}
+
 export async function requestConditionReview(patientId: string): Promise<ReviewResult> {
   const sourceId = getActiveFhirSourceId();
   const response = await fetch(`${API_BASE}/api/agent/review`, {
     method: "POST",
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(sourceId ? { "X-FHIR-Source": sourceId } : {}),
-    },
+    headers: agentHeaders(),
     body: JSON.stringify({ patientId, sourceId }),
   });
 
@@ -39,4 +44,23 @@ export async function requestConditionReview(patientId: string): Promise<ReviewR
   }
 
   return (await response.json()) as ReviewResult;
+}
+
+export async function requestPatientAsk(
+  patientId: string,
+  question: string,
+): Promise<AskResult> {
+  const sourceId = getActiveFhirSourceId();
+  const response = await fetch(`${API_BASE}/api/agent/ask`, {
+    method: "POST",
+    credentials: "include",
+    headers: agentHeaders(),
+    body: JSON.stringify({ patientId, sourceId, question }),
+  });
+
+  if (!response.ok) {
+    throw new AgentApiError(await parseError(response), response.status);
+  }
+
+  return (await response.json()) as AskResult;
 }

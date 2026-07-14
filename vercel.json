@@ -17,6 +17,9 @@
     },
     "api/agent/review.ts": {
       "maxDuration": 60
+    },
+    "api/agent/ask.ts": {
+      "maxDuration": 60
     }
   }
 }

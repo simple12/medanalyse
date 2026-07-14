@@ -64,6 +64,23 @@ export interface AgentCard {
   disclaimer: string;
 }
 
+export interface AskCitation {
+  resourceType: string;
+  id?: string;
+  excerpt: string;
+}
+
+export interface AskResult {
+  patientId: string;
+  sourceId: string;
+  question: string;
+  answer: string;
+  citations: AskCitation[];
+  disclaimer: string;
+  mode: "llm" | "extractive";
+  generatedAt: string;
+}
+
 export interface ReviewResult {
   patientId: string;
   sourceId: string;

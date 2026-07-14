@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Activity, AlertTriangle, CheckCircle2, Info, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { requestConditionReview } from "@/lib/agent-api";
+import { requestConditionReview, requestPatientAsk } from "@/lib/agent-api";
 import { cn } from "@/lib/utils";
 import type {
+  AskResult,
   CardIndicator,
   ControlStatus,
   ConditionAssessment,
@@ -70,6 +72,10 @@ export function PatientIntelligenceCard({
   const [result, setResult] = useState<ReviewResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [question, setQuestion] = useState("");
+  const [askResult, setAskResult] = useState<AskResult | null>(null);
+  const [askLoading, setAskLoading] = useState(false);
+  const [askError, setAskError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,6 +94,8 @@ export function PatientIntelligenceCard({
     void (async () => {
       setLoading(true);
       setError(null);
+      setAskResult(null);
+      setAskError(null);
       try {
         const next = await requestConditionReview(patientId);
         if (!cancelled) setResult(next);
@@ -103,6 +111,20 @@ export function PatientIntelligenceCard({
       cancelled = true;
     };
   }, [patientId, reloadKey]);
+
+  const submitAsk = async () => {
+    const trimmed = question.trim();
+    if (!trimmed) return;
+    setAskLoading(true);
+    setAskError(null);
+    try {
+      setAskResult(await requestPatientAsk(patientId, trimmed));
+    } catch (err) {
+      setAskError(err instanceof Error ? err.message : "Failed to answer question");
+    } finally {
+      setAskLoading(false);
+    }
+  };
 
   return (
     <section className="rounded-lg border bg-card p-6">
@@ -191,6 +213,63 @@ export function PatientIntelligenceCard({
               ))}
             </div>
           ) : null}
+
+          <div className="space-y-2 border-t pt-4">
+            <h3 className="text-sm font-semibold">Ask about this patient</h3>
+            <p className="text-xs text-muted-foreground">
+              Answers use this patient's FHIR chart facts. LLM phrasing is optional when OpenAI is configured.
+            </p>
+            <form
+              className="flex flex-col gap-2 sm:flex-row"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void submitAsk();
+              }}
+            >
+              <Input
+                value={question}
+                onChange={(event) => setQuestion(event.target.value)}
+                placeholder="e.g. What medications is this patient on?"
+                disabled={askLoading}
+              />
+              <Button type="submit" disabled={askLoading || !question.trim()}>
+                {askLoading ? "Asking..." : "Ask"}
+              </Button>
+            </form>
+            {askError ? (
+              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                {askError}
+              </div>
+            ) : null}
+            {askResult ? (
+              <div className="space-y-2 rounded-md border p-3 text-sm">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span className="rounded-full border px-2 py-0.5">
+                    {askResult.mode === "llm" ? "LLM answer" : "Extractive answer"}
+                  </span>
+                  <span>{new Date(askResult.generatedAt).toLocaleString()}</span>
+                </div>
+                <p className="whitespace-pre-wrap">{askResult.answer}</p>
+                {askResult.citations.length > 0 ? (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">Citations</p>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-muted-foreground">
+                      {askResult.citations.map((citation, index) => (
+                        <li key={`${citation.resourceType}-${citation.id ?? index}`}>
+                          <span className="font-medium">
+                            {citation.resourceType}
+                            {citation.id ? `/${citation.id}` : ""}:
+                          </span>{" "}
+                          {citation.excerpt}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                <p className="text-xs italic text-muted-foreground">{askResult.disclaimer}</p>
+              </div>
+            ) : null}
+          </div>
 
           <p className="text-xs italic text-muted-foreground">{result.card.disclaimer}</p>
         </div>

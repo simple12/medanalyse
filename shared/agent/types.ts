@@ -86,5 +86,23 @@ export interface ReviewResult {
   card: AgentCard;
 }
 
+export interface AskCitation {
+  resourceType: string;
+  id?: string;
+  excerpt: string;
+}
+
+export interface AskResult {
+  patientId: string;
+  sourceId: string;
+  question: string;
+  answer: string;
+  citations: AskCitation[];
+  disclaimer: string;
+  /** llm when a provider key is configured; extractive when answering from FHIR context only. */
+  mode: "llm" | "extractive";
+  generatedAt: string;
+}
+
 export const AGENT_DISCLAIMER =
   "Decision support only. Verify independently before acting. Not a substitute for clinical judgment.";
