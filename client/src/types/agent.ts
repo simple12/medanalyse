@@ -78,6 +78,7 @@ export interface AskResult {
   citations: AskCitation[];
   disclaimer: string;
   mode: "llm" | "extractive";
+  retrieval: "graphrag" | "memory";
   generatedAt: string;
 }
 

@@ -247,6 +247,10 @@ export function PatientIntelligenceCard({
                   <span className="rounded-full border px-2 py-0.5">
                     {askResult.mode === "llm" ? "LLM answer" : "Extractive answer"}
                   </span>
+                  <span className="rounded-full border px-2 py-0.5">
+                    Retrieval:{" "}
+                    {askResult.retrieval === "graphrag" ? "GraphRAG" : "in-memory"}
+                  </span>
                   <span>{new Date(askResult.generatedAt).toLocaleString()}</span>
                 </div>
                 <p className="whitespace-pre-wrap">{askResult.answer}</p>

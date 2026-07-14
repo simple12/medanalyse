@@ -101,6 +101,8 @@ export interface AskResult {
   disclaimer: string;
   /** llm when a provider key is configured; extractive when answering from FHIR context only. */
   mode: "llm" | "extractive";
+  /** Which retrieval path produced citations/context. */
+  retrieval: "graphrag" | "memory";
   generatedAt: string;
 }
 

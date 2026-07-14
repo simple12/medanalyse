@@ -134,6 +134,100 @@ router.post("/interaction-check", async (req: Request, res: Response): Promise<v
   }
 });
 
+router.get("/graph-status", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const connection = getResolvedConnection(req);
+    if (!isAgentEnabledSource(connection.sourceId)) {
+      res.status(400).json({
+        error: "Patient Intelligence is only available for Epic and Cerner sources",
+      });
+      return;
+    }
+    const patientId =
+      typeof req.query.patientId === "string" && req.query.patientId.trim()
+        ? req.query.patientId.trim()
+        : undefined;
+    if (!patientId) {
+      res.status(400).json({ error: "patientId is required" });
+      return;
+    }
+    const { isGraphDbConfigured } = await import("../../../shared/agent/db.js");
+    const { canEmbed } = await import("../../../shared/agent/embeddings.js");
+    const { getPatientSyncMeta } = await import("../../../shared/agent/graph-sync.js");
+    const meta = await getPatientSyncMeta(connection.sourceId, patientId, process.env);
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).json({
+      configured: isGraphDbConfigured(process.env),
+      canEmbed: canEmbed(process.env),
+      sourceId: connection.sourceId,
+      patientId,
+      sync: meta
+        ? {
+            syncedAt: meta.syncedAt.toISOString(),
+            chunkCount: meta.chunkCount,
+            nodeCount: meta.nodeCount,
+          }
+        : null,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to load graph status";
+    const status = message.includes("SMART login required") ? 401 : 502;
+    res.status(status).json({ error: message });
+  }
+});
+
+router.post("/graph-status", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const connection = getResolvedConnection(req);
+    if (!isAgentEnabledSource(connection.sourceId)) {
+      res.status(400).json({
+        error: "Patient Intelligence is only available for Epic and Cerner sources",
+      });
+      return;
+    }
+    const patientId = readPatientId(req.body);
+    if (!patientId) {
+      res.status(400).json({ error: "patientId is required" });
+      return;
+    }
+    const force =
+      req.body && typeof req.body === "object" && (req.body as { force?: unknown }).force === true;
+    const { fetchPatientClinicalData } = await import(
+      "../../../shared/agent/fhir-reader.js"
+    );
+    const { assessConditionControl } = await import(
+      "../../../shared/agent/condition-control.js"
+    );
+    const { syncPatientGraph } = await import("../../../shared/agent/graph-sync.js");
+    const clinical = await fetchPatientClinicalData(connection, patientId);
+    const assessments = assessConditionControl(
+      clinical.conditions,
+      clinical.observations,
+      clinical.medications,
+    );
+    const result = await syncPatientGraph(
+      {
+        sourceId: connection.sourceId,
+        patientId,
+        conditions: clinical.conditions,
+        observations: clinical.observations,
+        medications: clinical.medications,
+        assessments,
+      },
+      process.env,
+      { force },
+    );
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).json(result);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Graph sync failed";
+    const status = message.includes("SMART login required") ? 401 : 502;
+    res.status(status).json({ error: message });
+  }
+});
+
 function readSettingsSecret(req: Request): string | undefined {
   const header = req.header("x-agent-settings-secret");
   if (header?.trim()) return header.trim();

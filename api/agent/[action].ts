@@ -13,6 +13,11 @@ import {
 } from "../../shared/agent/llm-settings.js";
 import { runConditionReview } from "../../shared/agent/review.js";
 import { runInteractionCheck } from "../../shared/agent/interaction-check.js";
+import { isGraphDbConfigured } from "../../shared/agent/db.js";
+import { canEmbed } from "../../shared/agent/embeddings.js";
+import { getPatientSyncMeta, syncPatientGraph } from "../../shared/agent/graph-sync.js";
+import { assessConditionControl } from "../../shared/agent/condition-control.js";
+import { fetchPatientClinicalData } from "../../shared/agent/fhir-reader.js";
 
 function actionFromRequest(req: VercelRequest): string {
   const queryAction = req.query.action;
@@ -231,6 +236,82 @@ async function handleInteractionCheck(
   res.status(200).json(result);
 }
 
+async function handleGraphStatus(
+  req: VercelRequest,
+  res: VercelResponse,
+): Promise<void> {
+  res.setHeader("Cache-Control", "no-store");
+  const connection = getResolvedConnection(req);
+  if (!isAgentEnabledSource(connection.sourceId)) {
+    res.status(400).json({
+      error: "Patient Intelligence is only available for Epic and Cerner sources",
+    });
+    return;
+  }
+
+  const body = readBodyObject(req.body);
+  const queryPatientId =
+    typeof req.query.patientId === "string" ? req.query.patientId.trim() : "";
+  const patientId =
+    (typeof body.patientId === "string" && body.patientId.trim()
+      ? body.patientId.trim()
+      : undefined) || queryPatientId || undefined;
+
+  if (!patientId) {
+    res.status(400).json({ error: "patientId is required" });
+    return;
+  }
+
+  if (req.method === "GET") {
+    const meta = await getPatientSyncMeta(
+      connection.sourceId,
+      patientId,
+      process.env,
+    );
+    res.status(200).json({
+      configured: isGraphDbConfigured(process.env),
+      canEmbed: canEmbed(process.env),
+      sourceId: connection.sourceId,
+      patientId,
+      sync: meta
+        ? {
+            syncedAt: meta.syncedAt.toISOString(),
+            chunkCount: meta.chunkCount,
+            nodeCount: meta.nodeCount,
+          }
+        : null,
+    });
+    return;
+  }
+
+  if (req.method === "POST") {
+    const clinical = await fetchPatientClinicalData(connection, patientId);
+    const assessments = assessConditionControl(
+      clinical.conditions,
+      clinical.observations,
+      clinical.medications,
+    );
+    const force = body.force === true;
+    const result = await syncPatientGraph(
+      {
+        sourceId: connection.sourceId,
+        patientId,
+        conditions: clinical.conditions,
+        observations: clinical.observations,
+        medications: clinical.medications,
+        assessments,
+      },
+      process.env,
+      { force },
+    );
+    res.status(200).json(result);
+    return;
+  }
+
+  res.setHeader("Allow", "GET, POST");
+  res.status(405).json({ error: "Method not allowed" });
+}
+
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
@@ -248,6 +329,10 @@ export default async function handler(
     }
     if (action === "interaction-check") {
       await handleInteractionCheck(req, res);
+      return;
+    }
+    if (action === "graph-status") {
+      await handleGraphStatus(req, res);
       return;
     }
     if (action === "llm-settings") {

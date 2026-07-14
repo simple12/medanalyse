@@ -171,6 +171,20 @@ curl -s -X PUT https://fhir-patient-app-five.vercel.app/api/agent/llm-settings \
 
 ---
 
+## GraphRAG Ask (Postgres + pgvector)
+
+1. Connect **Neon** to the Vercel project (Storage marketplace) and redeploy **once** so `DATABASE_URL` / `POSTGRES_URL` exist.
+2. Keep `OPENAI_API_KEY` set (embeddings use `text-embedding-3-small` even if Ask phrasing uses Gemini/Claude from KV).
+3. Ask a question on a patient. The answer badge shows **Retrieval: GraphRAG** when the DB path ran, or **Retrieval: in-memory** as fallback.
+4. Optional status:
+
+```bash
+curl -s "https://fhir-patient-app-five.vercel.app/api/agent/graph-status?patientId=PATIENT_ID" \
+  -H "Cookie: <smart-session>"
+```
+
+---
+
 ## Journey B1 interaction check (in-app order draft)
 
 On Epic/Cerner patient details, use **New medication order**:

@@ -1,11 +1,11 @@
 # Medication Intelligence Agent - Draft Spec
 
-**Status:** Active - Phase 1 Journeys A and C are live; Journey B1 interaction-check + in-app order draft UI is in progress (FHIR MedicationRequest write still blocked on SMART write scopes).
+**Status:** Active - Phase 1 Journeys A and C are live; Journey B1 interaction-check + order draft UI is live (MedicationRequest write still blocked on SMART write scopes); Journey C GraphRAG persists patient nodes/edges/chunks in Neon Postgres + pgvector when `DATABASE_URL` is set (in-memory fallback otherwise).
 Journey A (condition-control review + Patient Intelligence card) has a working deterministic engine, `/api/agent/review`, and UI on Epic/Cerner patient details.
-Journey C (`POST /api/agent/ask`) uses in-memory chart retrieval with optional LLM phrasing via the Vercel AI SDK when `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY` / `GOOGLE_GENERATIVE_AI_API_KEY` is set.
+Journey C (`POST /api/agent/ask`) uses GraphRAG retrieval when Neon + `OPENAI_API_KEY` are available, else in-memory chart retrieval, with optional LLM phrasing via the Vercel AI SDK when provider keys are set.
 Provider and model selection are stored in Vercel KV / Upstash Redis (`GET`/`PUT /api/agent/llm-settings`) so swaps do not need a redeploy; env vars remain the key store and the fallback when KV is empty.
 Journey B1 (`POST /api/agent/interaction-check` + New medication order UI) uses a curated DDInter MVP subset; Confirm order stays disabled until write scopes are registered.
-Postgres/pgvector GraphRAG, full DDInter ingest, Journey B2 CDS Hooks, and MedicationRequest writes are not built yet.
+Full DDInter ingest, Journey B2 CDS Hooks, guideline corpus, and MedicationRequest writes are not built yet.
 This document remains the source of truth; expect it to change as we iterate.
 
 ### Decisions locked in this revision
@@ -253,6 +253,7 @@ This is the standard "GraphRAG" pattern: graph traversal gives precise structure
 The Vercel functions are stateless, so the graph and vector store live in an external managed Postgres.
 
 - **MVP choice: Postgres + pgvector**, modeling the graph as node/edge tables. One managed database covers both the graph (node/edge tables) and the embeddings via the `pgvector` extension. Simplest ops, and fine at the scale of "one graph per patient." On Vercel the natural pick is **Vercel Postgres (Neon-backed, supports pgvector)** or Neon/Supabase directly - all serverless-friendly with connection pooling, which matters because serverless functions open many short-lived connections.
+- **Implemented (MVP):** Neon via Vercel Storage; tables `kg_nodes`, `kg_edges`, `kg_chunks` (vector 1536), `kg_patient_sync`. Sync runs on Ask when stale (>15 min). Embeddings use OpenAI `text-embedding-3-small`. Ask falls back to in-memory retrieval when `DATABASE_URL` or embeddings are unavailable. Status/force-sync: `GET`/`POST /api/agent/graph-status`.
 - **Later upgrade:** a dedicated graph database (Neo4j Aura, Memgraph) if edge-table traversal in SQL becomes painful. Not a day-one requirement.
 
 Recommendation: start with Vercel/Neon Postgres + pgvector, revisit if traversal queries outgrow it. Use a pooled connection string (Neon's pooler or Prisma Accelerate/similar) so the serverless functions do not exhaust database connections.

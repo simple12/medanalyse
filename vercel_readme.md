@@ -265,6 +265,12 @@ Provider and model selection do **not**: they are stored in Upstash Redis / Verc
 - Operators: [TESTING.md](./TESTING.md#agent-llm-provider-no-redeploy) (`GET`/`PUT /api/agent/llm-settings`).
 - Env names: [.env.example](./.env.example) (`KV_REST_API_*`, `AGENT_SETTINGS_SECRET`).
 
+### GraphRAG (Postgres + pgvector)
+
+Ask retrieval prefers Neon Postgres (`DATABASE_URL` / `POSTGRES_URL`) with `pgvector` chunk embeddings (`OPENAI_API_KEY` + `text-embedding-3-small`).
+Without the DB, Ask falls back to in-memory FHIR context (same as before).
+See [AGENT_SPEC.md](./AGENT_SPEC.md) section 9 and [TESTING.md](./TESTING.md#graphrag-ask-postgres--pgvector).
+
 ---
 
 ## Verify deployment

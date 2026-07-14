@@ -1,17 +1,20 @@
 /**
  * Journey C: ask a question about this patient (AGENT_SPEC.md).
- * MVP uses in-memory retrieval over FHIR + condition assessments.
- * Optional LLM phrasing via Vercel AI SDK when OPENAI_API_KEY, ANTHROPIC_API_KEY,
- * or GEMINI_API_KEY / GOOGLE_GENERATIVE_AI_API_KEY is set.
- * Postgres/pgvector GraphRAG is deferred.
+ * Prefers Postgres/pgvector GraphRAG when DATABASE_URL + OPENAI_API_KEY are set;
+ * falls back to in-memory retrieval over FHIR context.
+ * Optional LLM phrasing via Vercel AI SDK / KV provider settings.
  */
 
 import type { ResolvedFhirConnection } from "../fhir-sources.js";
 import { assessConditionControl } from "./condition-control.js";
 import { buildContextChunks, retrieveRelevantChunks } from "./context.js";
+import { isGraphDbConfigured } from "./db.js";
+import { canEmbed } from "./embeddings.js";
 import { fetchPatientClinicalData } from "./fhir-reader.js";
+import { retrieveFromGraph } from "./graph-retrieve.js";
+import { syncPatientGraph } from "./graph-sync.js";
 import { generateAgentAnswer } from "./llm.js";
-import { AGENT_DISCLAIMER, type AskResult } from "./types.js";
+import { AGENT_DISCLAIMER, type AskCitation, type AskResult } from "./types.js";
 
 function buildExtractiveAnswer(
   question: string,
@@ -32,7 +35,6 @@ function buildExtractiveAnswer(
 }
 
 function sanitizeLlmError(message: string): string {
-  // Avoid leaking key material or long provider URLs into the UI.
   if (/incorrect api key|invalid_api_key|unauthorized|authentication|api key not valid/i.test(message)) {
     return "The configured LLM API key was rejected. Check OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY in Vercel env vars.";
   }
@@ -57,21 +59,72 @@ export async function runPatientAsk(
     clinical.medications,
   );
 
-  const allChunks = buildContextChunks({
-    ...clinical,
-    assessments,
-  });
-  const { chunks, citations } = retrieveRelevantChunks(trimmed, allChunks);
+  let retrieval: AskResult["retrieval"] = "memory";
+  let excerpts: string[] = [];
+  let citations: AskCitation[] = [];
+  let contextBlocks: string[] = [];
 
-  const contextBlocks = chunks.map(
-    (chunk) => `[${chunk.resourceType}${chunk.resourceId ? `/${chunk.resourceId}` : ""}] ${chunk.text}`,
-  );
+  const canGraph = isGraphDbConfigured(env) && canEmbed(env);
+  if (canGraph) {
+    try {
+      await syncPatientGraph(
+        {
+          sourceId: connection.sourceId,
+          patientId,
+          conditions: clinical.conditions,
+          observations: clinical.observations,
+          medications: clinical.medications,
+          assessments,
+        },
+        env,
+      );
+
+      const graph = await retrieveFromGraph(
+        {
+          sourceId: connection.sourceId,
+          patientId,
+          question: trimmed,
+        },
+        env,
+      );
+
+      if (graph.ok && graph.chunks.length > 0) {
+        retrieval = "graphrag";
+        excerpts = [
+          ...graph.graphFacts.map((fact) => `Graph: ${fact}`),
+          ...graph.chunks.map((chunk) => chunk.text),
+        ];
+        citations = graph.citations;
+        contextBlocks = [
+          ...graph.graphFacts.map((fact) => `[Graph] ${fact}`),
+          ...graph.chunks.map(
+            (chunk) =>
+              `[${chunk.resourceType}${chunk.resourceId ? `/${chunk.resourceId}` : ""}] ${chunk.text}`,
+          ),
+        ];
+      }
+    } catch {
+      // Fall through to in-memory retrieval.
+      retrieval = "memory";
+    }
+  }
+
+  if (retrieval === "memory") {
+    const allChunks = buildContextChunks({
+      ...clinical,
+      assessments,
+    });
+    const memory = retrieveRelevantChunks(trimmed, allChunks);
+    excerpts = memory.chunks.map((chunk) => chunk.text);
+    citations = memory.citations;
+    contextBlocks = memory.chunks.map(
+      (chunk) =>
+        `[${chunk.resourceType}${chunk.resourceId ? `/${chunk.resourceId}` : ""}] ${chunk.text}`,
+    );
+  }
 
   let mode: AskResult["mode"] = "extractive";
-  let answer = buildExtractiveAnswer(
-    trimmed,
-    chunks.map((chunk) => chunk.text),
-  );
+  let answer = buildExtractiveAnswer(trimmed, excerpts);
 
   try {
     const llmAnswer = await generateAgentAnswer({
@@ -84,7 +137,6 @@ export async function runPatientAsk(
       answer = llmAnswer;
     }
   } catch (error) {
-    // Fall back to extractive so the UI still works if the provider errors.
     const detail = sanitizeLlmError(
       error instanceof Error ? error.message : "LLM call failed",
     );
@@ -99,6 +151,7 @@ export async function runPatientAsk(
     citations,
     disclaimer: AGENT_DISCLAIMER,
     mode,
+    retrieval,
     generatedAt: new Date().toISOString(),
   };
 }
