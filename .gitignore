@@ -3,6 +3,8 @@ node_modules/
 
 # Environment
 .env
+.env.*
+!.env.example
 .env.local
 
 # Build
@@ -24,4 +26,3 @@ server/dist/
 # Glob matches ignore_this_notes.txt, ignore_this-*.md, ignore_this - *.md, etc.
 ignore_this*
 shared/*.js
-.env*
