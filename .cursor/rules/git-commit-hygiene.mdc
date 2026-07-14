@@ -1,0 +1,14 @@
+---
+description: Commit/tag hygiene - no agent Co-authored-by, no em dashes, Markdown sentence lines
+alwaysApply: true
+---
+
+# Commit and docs hygiene
+
+- Never use the em dash. Use a plain hyphen `-` instead.
+- When writing commit messages, NEVER add an agent name as co-author (`Co-authored-by: Cursor` or similar).
+- Never manually modify `CHANGELOG.md` or files marked auto-generated.
+- When writing or substantially editing long Markdown, put each full sentence on its own line.
+- After `git commit` / `git commit --amend`, verify there is no `Co-authored-by` trailer.
+- If the tooling reinjects `Co-authored-by`, rebuild the commit with `git commit-tree` (see personal skill `git-commit-hygiene`) before pushing.
+- GitHub Contributors includes historical co-authors. A clean Contributors list needs a new orphan history or a new repository, not only a tip-commit fix.
