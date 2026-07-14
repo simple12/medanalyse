@@ -104,5 +104,42 @@ export interface AskResult {
   generatedAt: string;
 }
 
+export interface ProposedMedication {
+  rxnormCode?: string;
+  display: string;
+}
+
+export interface InteractionFinding {
+  severity: "minor" | "moderate" | "major";
+  proposedDisplay: string;
+  proposedRxnorm: string;
+  currentDisplay: string;
+  currentRxnorm: string;
+  currentMedicationRequestId?: string;
+  mechanism: string;
+  alternatives: Array<{ rxnorm: string; display: string }>;
+}
+
+export interface InteractionCheckResult {
+  patientId: string;
+  sourceId: string;
+  generatedAt: string;
+  proposed: ProposedMedication;
+  findings: InteractionFinding[];
+  /** True when AllergyIntolerance could not be read (scope/server). */
+  allergiesUnavailable: boolean;
+  /** Allergy substance labels that appear related to the proposed drug (best-effort). */
+  allergyWarnings: string[];
+  knownInteractionCount: number;
+  noKnownInteractionMessage?: string;
+  card: AgentCard;
+  /** In-app submit is deferred until MedicationRequest.write is registered. */
+  submitEnabled: false;
+  submitBlockedReason: string;
+}
+
 export const AGENT_DISCLAIMER =
   "Decision support only. Verify independently before acting. Not a substitute for clinical judgment.";
+
+export const INTERACTION_SUBMIT_BLOCKED_REASON =
+  "Submitting a MedicationRequest requires patient/MedicationRequest.write (or user/...write) on the SMART app registration. That scope is not enabled yet; confirm stays disabled.";

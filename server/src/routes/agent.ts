@@ -3,6 +3,7 @@ import { getResolvedConnection } from "../lib/resolve-fhir-connection.js";
 import { runPatientAsk } from "../../../shared/agent/ask.js";
 import { isAgentEnabledSource } from "../../../shared/agent/fhir-reader.js";
 import { runConditionReview } from "../../../shared/agent/review.js";
+import { runInteractionCheck } from "../../../shared/agent/interaction-check.js";
 
 const router = Router();
 
@@ -75,6 +76,60 @@ router.post("/ask", async (req: Request, res: Response): Promise<void> => {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Agent ask failed";
     const status = message.includes("SMART login required") ? 401 : 502;
+    res.status(status).json({ error: message });
+  }
+});
+
+router.post("/interaction-check", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const connection = getResolvedConnection(req);
+    if (!isAgentEnabledSource(connection.sourceId)) {
+      res.status(400).json({
+        error: "Patient Intelligence is only available for Epic and Cerner sources",
+      });
+      return;
+    }
+
+    const patientId = readPatientId(req.body);
+    const proposed =
+      req.body && typeof req.body === "object"
+        ? (req.body as { proposedMedication?: { rxnormCode?: unknown; display?: unknown } })
+            .proposedMedication
+        : undefined;
+    const display =
+      typeof proposed?.display === "string" && proposed.display.trim()
+        ? proposed.display.trim()
+        : undefined;
+    const rxnormCode =
+      typeof proposed?.rxnormCode === "string" && proposed.rxnormCode.trim()
+        ? proposed.rxnormCode.trim()
+        : undefined;
+
+    if (!patientId) {
+      res.status(400).json({ error: "patientId is required" });
+      return;
+    }
+    if (!display && !rxnormCode) {
+      res.status(400).json({
+        error: "proposedMedication.display or proposedMedication.rxnormCode is required",
+      });
+      return;
+    }
+
+    const result = await runInteractionCheck(connection, patientId, {
+      display: display || rxnormCode || "Unknown medication",
+      rxnormCode,
+    });
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).json(result);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Interaction check failed";
+    const status = message.includes("SMART login required")
+      ? 401
+      : message.includes("proposedMedication")
+        ? 400
+        : 502;
     res.status(status).json({ error: message });
   }
 });

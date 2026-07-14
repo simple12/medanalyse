@@ -171,6 +171,17 @@ curl -s -X PUT https://fhir-patient-app-five.vercel.app/api/agent/llm-settings \
 
 ---
 
+## Journey B1 interaction check (in-app order draft)
+
+On Epic/Cerner patient details, use **New medication order**:
+
+1. Pick a proposed drug (curated RxNorm list; ibuprofen is a good test against aspirin charts).
+2. Click **Check interactions**.
+3. Expect a DDInter-subset card: known interaction, severity, alternatives, or the explicit "no known interaction in this subset" wording (never "safe").
+4. **Confirm order** stays disabled until `MedicationRequest.write` is registered on the SMART app.
+
+---
+
 ## Reporting issues
 
 Include:

@@ -1,4 +1,4 @@
-import type { AskResult, ReviewResult } from "@/types/agent";
+import type { AskResult, InteractionCheckResult, ReviewResult } from "@/types/agent";
 import { getActiveFhirSourceId } from "@/lib/fhir-source-storage";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
@@ -63,4 +63,23 @@ export async function requestPatientAsk(
   }
 
   return (await response.json()) as AskResult;
+}
+
+export async function requestInteractionCheck(
+  patientId: string,
+  proposedMedication: { rxnormCode?: string; display: string },
+): Promise<InteractionCheckResult> {
+  const sourceId = getActiveFhirSourceId();
+  const response = await fetch(`${API_BASE}/api/agent/interaction-check`, {
+    method: "POST",
+    credentials: "include",
+    headers: agentHeaders(),
+    body: JSON.stringify({ patientId, sourceId, proposedMedication }),
+  });
+
+  if (!response.ok) {
+    throw new AgentApiError(await parseError(response), response.status);
+  }
+
+  return (await response.json()) as InteractionCheckResult;
 }

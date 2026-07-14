@@ -87,3 +87,34 @@ export interface ReviewResult {
   generatedAt: string;
   card: AgentCard;
 }
+
+export interface ProposedMedication {
+  rxnormCode?: string;
+  display: string;
+}
+
+export interface InteractionFinding {
+  severity: "minor" | "moderate" | "major";
+  proposedDisplay: string;
+  proposedRxnorm: string;
+  currentDisplay: string;
+  currentRxnorm: string;
+  currentMedicationRequestId?: string;
+  mechanism: string;
+  alternatives: Array<{ rxnorm: string; display: string }>;
+}
+
+export interface InteractionCheckResult {
+  patientId: string;
+  sourceId: string;
+  generatedAt: string;
+  proposed: ProposedMedication;
+  findings: InteractionFinding[];
+  allergiesUnavailable: boolean;
+  allergyWarnings: string[];
+  knownInteractionCount: number;
+  noKnownInteractionMessage?: string;
+  card: AgentCard;
+  submitEnabled: false;
+  submitBlockedReason: string;
+}

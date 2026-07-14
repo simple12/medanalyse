@@ -7,6 +7,7 @@
 
 import type { FhirSourceId, ResolvedFhirConnection } from "../fhir-sources.js";
 import type {
+  FhirAllergyIntolerance,
   FhirBundle,
   FhirCondition,
   FhirMedicationRequest,
@@ -19,6 +20,8 @@ export interface PatientClinicalData {
   conditions: FhirCondition[];
   observations: FhirObservation[];
   medications: FhirMedicationRequest[];
+  allergies: FhirAllergyIntolerance[];
+  allergiesUnavailable: boolean;
 }
 
 async function fhirSearch<T>(
@@ -141,6 +144,25 @@ async function fetchConditions(
   }
 }
 
+async function fetchAllergies(
+  connection: ResolvedFhirConnection,
+  patientId: string,
+): Promise<{ allergies: FhirAllergyIntolerance[]; unavailable: boolean }> {
+  try {
+    const allergies = await fhirSearch<FhirAllergyIntolerance>(
+      connection,
+      "AllergyIntolerance",
+      {
+        patient: patientId,
+        _count: "50",
+      },
+    );
+    return { allergies, unavailable: false };
+  } catch {
+    return { allergies: [], unavailable: true };
+  }
+}
+
 /**
  * Fetch conditions, quantitative observations, and medication requests for a patient.
  * Each read is independent so the review can still run on partial data.
@@ -149,16 +171,23 @@ export async function fetchPatientClinicalData(
   connection: ResolvedFhirConnection,
   patientId: string,
 ): Promise<PatientClinicalData> {
-  const [conditions, observations, medications] = await Promise.all([
+  const [conditions, observations, medications, allergyResult] = await Promise.all([
     fetchConditions(connection, patientId),
     fetchObservations(connection, patientId),
     fhirSearch<FhirMedicationRequest>(connection, "MedicationRequest", {
       patient: patientId,
       _count: "100",
     }).catch(() => [] as FhirMedicationRequest[]),
+    fetchAllergies(connection, patientId),
   ]);
 
-  return { conditions, observations, medications };
+  return {
+    conditions,
+    observations,
+    medications,
+    allergies: allergyResult.allergies,
+    allergiesUnavailable: allergyResult.unavailable,
+  };
 }
 
 /** Sources that arm Journey A / Patient Intelligence in Phase 1. */

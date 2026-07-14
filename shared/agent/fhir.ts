@@ -66,6 +66,19 @@ export interface FhirMedicationRequest {
   reasonReference?: Reference[];
 }
 
+export interface FhirAllergyIntolerance {
+  resourceType: "AllergyIntolerance";
+  id?: string;
+  clinicalStatus?: CodeableConcept;
+  verificationStatus?: CodeableConcept;
+  code?: CodeableConcept;
+  patient?: Reference;
+  reaction?: Array<{
+    manifestation?: CodeableConcept[];
+    severity?: string;
+  }>;
+}
+
 export interface FhirBundleEntry {
   resource?: { resourceType?: string; [key: string]: unknown };
 }

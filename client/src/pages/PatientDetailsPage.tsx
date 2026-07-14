@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { ConditionsTable } from "@/components/ConditionsTable";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { MedicationsTable } from "@/components/MedicationsTable";
+import { MedicationOrderDraft } from "@/components/MedicationOrderDraft";
 import { PatientIntelligenceCard } from "@/components/PatientIntelligenceCard";
 import { VitalsSection } from "@/components/VitalsSection";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -270,6 +271,10 @@ export function PatientDetailsPage() {
           <MedicationsTable medications={medications} />
         )}
       </section>
+
+      {(sourceId === "epic" || sourceId === "cerner") && patient ? (
+        <MedicationOrderDraft patientId={id} />
+      ) : null}
     </div>
   );
 }

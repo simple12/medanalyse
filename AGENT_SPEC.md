@@ -1,10 +1,11 @@
 # Medication Intelligence Agent - Draft Spec
 
-**Status:** Active - Phase 1 Journeys A and C are in progress in this repo.
+**Status:** Active - Phase 1 Journeys A and C are live; Journey B1 interaction-check + in-app order draft UI is in progress (FHIR MedicationRequest write still blocked on SMART write scopes).
 Journey A (condition-control review + Patient Intelligence card) has a working deterministic engine, `/api/agent/review`, and UI on Epic/Cerner patient details.
 Journey C (`POST /api/agent/ask`) uses in-memory chart retrieval with optional LLM phrasing via the Vercel AI SDK when `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY` / `GOOGLE_GENERATIVE_AI_API_KEY` is set.
 Provider and model selection are stored in Vercel KV / Upstash Redis (`GET`/`PUT /api/agent/llm-settings`) so swaps do not need a redeploy; env vars remain the key store and the fallback when KV is empty.
-Postgres/pgvector GraphRAG, Journeys B, DDInter, and CDS Hooks are not built yet.
+Journey B1 (`POST /api/agent/interaction-check` + New medication order UI) uses a curated DDInter MVP subset; Confirm order stays disabled until write scopes are registered.
+Postgres/pgvector GraphRAG, full DDInter ingest, Journey B2 CDS Hooks, and MedicationRequest writes are not built yet.
 This document remains the source of truth; expect it to change as we iterate.
 
 ### Decisions locked in this revision

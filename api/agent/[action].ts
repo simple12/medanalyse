@@ -12,6 +12,7 @@ import {
   saveLlmSettings,
 } from "../../shared/agent/llm-settings.js";
 import { runConditionReview } from "../../shared/agent/review.js";
+import { runInteractionCheck } from "../../shared/agent/interaction-check.js";
 
 function actionFromRequest(req: VercelRequest): string {
   const queryAction = req.query.action;
@@ -174,6 +175,62 @@ async function handleLlmSettings(
   res.status(405).json({ error: "Method not allowed" });
 }
 
+async function handleInteractionCheck(
+  req: VercelRequest,
+  res: VercelResponse,
+): Promise<void> {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+
+  const connection = getResolvedConnection(req);
+  if (!isAgentEnabledSource(connection.sourceId)) {
+    res.status(400).json({
+      error: "Patient Intelligence is only available for Epic and Cerner sources",
+    });
+    return;
+  }
+
+  const body = readBodyObject(req.body);
+  const patientId =
+    typeof body.patientId === "string" && body.patientId.trim()
+      ? body.patientId.trim()
+      : undefined;
+  const proposedRaw = body.proposedMedication;
+  const proposedRecord =
+    proposedRaw && typeof proposedRaw === "object"
+      ? (proposedRaw as { rxnormCode?: unknown; display?: unknown })
+      : {};
+  const display =
+    typeof proposedRecord.display === "string" && proposedRecord.display.trim()
+      ? proposedRecord.display.trim()
+      : undefined;
+  const rxnormCode =
+    typeof proposedRecord.rxnormCode === "string" && proposedRecord.rxnormCode.trim()
+      ? proposedRecord.rxnormCode.trim()
+      : undefined;
+
+  if (!patientId) {
+    res.status(400).json({ error: "patientId is required" });
+    return;
+  }
+  if (!display && !rxnormCode) {
+    res.status(400).json({
+      error: "proposedMedication.display or proposedMedication.rxnormCode is required",
+    });
+    return;
+  }
+
+  const result = await runInteractionCheck(connection, patientId, {
+    display: display || rxnormCode || "Unknown medication",
+    rxnormCode,
+  });
+  res.setHeader("Cache-Control", "no-store");
+  res.status(200).json(result);
+}
+
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse,
@@ -189,6 +246,10 @@ export default async function handler(
       await handleAsk(req, res);
       return;
     }
+    if (action === "interaction-check") {
+      await handleInteractionCheck(req, res);
+      return;
+    }
     if (action === "llm-settings") {
       await handleLlmSettings(req, res);
       return;
@@ -199,7 +260,9 @@ export default async function handler(
     const message = error instanceof Error ? error.message : "Agent request failed";
     const status = message.includes("SMART login required")
       ? 401
-      : message.includes("provider must") || message.includes("model must")
+      : message.includes("provider must") ||
+          message.includes("model must") ||
+          message.includes("proposedMedication")
         ? 400
         : 502;
     res.status(status).json({ error: message });
