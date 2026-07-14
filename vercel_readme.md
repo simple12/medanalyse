@@ -256,6 +256,15 @@ After changing env vars, redeploy so functions pick up new values:
 vercel deploy --prod
 ```
 
+### Agent LLM provider / model (request-time; no redeploy)
+
+API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, …) stay in Vercel env and still need a redeploy when first added.
+Provider and model selection do **not**: they are stored in Upstash Redis / Vercel KV and read on each ask.
+
+- Spec decision: [AGENT_SPEC.md](./AGENT_SPEC.md) section 10 (request-time KV config) and section 11.
+- Operators: [TESTING.md](./TESTING.md#agent-llm-provider-no-redeploy) (`GET`/`PUT /api/agent/llm-settings`).
+- Env names: [.env.example](./.env.example) (`KV_REST_API_*`, `AGENT_SETTINGS_SECRET`).
+
 ---
 
 ## Verify deployment

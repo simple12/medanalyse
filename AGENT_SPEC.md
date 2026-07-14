@@ -14,7 +14,9 @@ These were open questions in the first draft and are now settled (see [10. Decis
 1. Order-check delivery uses **CDS Hooks**, not a generic webhook.
 2. The Agent Service ships as **TypeScript functions on Vercel**, added to the existing `api/` project - not a separate GCP container. All state lives in an external database, so the compute is stateless and fits Vercel's serverless model. See [4. High-level architecture](#4-high-level-architecture).
 3. Drug interaction data uses **DDInter (free)**. NLM's interaction API is retired and no commercial license will be purchased.
-4. The **LLM is pluggable** - any model behind a configurable provider interface, no vendor committed. In TypeScript this is the Vercel AI SDK. See [11. Agentic stack](#11-agentic-stack).
+4. The **LLM is pluggable** - any model behind a configurable provider interface, no vendor committed.
+   Provider and model are **request-time config in Vercel KV / Upstash Redis** (`GET`/`PUT /api/agent/llm-settings`); API keys stay in env.
+   See [11. Agentic stack](#11-agentic-stack).
 5. CDS Hooks vendor registration is deferred to its **own later phase**.
 6. Regulatory posture is **MVP / synthetic-data only** for now; production-PHI clearance is out of scope until later.
 7. **Scope change from the PRD:** the physician will eventually place medication orders **from inside this app**. This reopens the PRD's "no clinical writes from the UI" non-goal; see [2. Scope](#2-scope) and [Journey B](#journey-b-order-time-interaction-check).
@@ -262,14 +264,21 @@ Recommendation: start with Vercel/Neon Postgres + pgvector, revisit if traversal
 2. **Agent Service: TypeScript functions on Vercel**, in the existing `api/` project (not a separate GCP container). Enabled by externalizing all state to Postgres; section 4.
 3. **Drug interaction data: DDInter (free)**. No commercial license (section 8).
 4. **LLM: pluggable / configurable** - any model behind a provider interface, no vendor committed (section 11).
-5. **CDS Hooks registration: deferred to its own phase** (phase 2, section 14). Registering with Epic and Cerner is a per-vendor developer-portal process, separate from the SMART app registration already in place for read access.
-6. **Regulatory posture: MVP / synthetic-data only** for now. Software that suggests a specific alternate drug sits near the FDA's line for regulated Clinical Decision Support under the 21st Century Cures Act CDS exemption (which broadly requires the clinician be able to independently review the basis for a recommendation). The whole design leans on "explain the rationale, cite evidence, physician confirms independently, no auto-apply" to stay on the right side of that line, but a real regulatory/legal read is required **before** any production use with real patients. Not solved here, deliberately deferred.
-7. **In-app ordering: in scope.** The physician will eventually place orders from inside this app; this reopens the PRD's "no clinical writes" non-goal for MedicationRequest only (section 2).
+5. **LLM provider/model selection: request-time config in Vercel KV / Upstash Redis** (`agent:llm-settings`, `GET`/`PUT /api/agent/llm-settings` with `AGENT_SETTINGS_SECRET`).
+   API keys remain in Vercel env.
+   Env `LLM_PROVIDER` / `*_MODEL` are fallback only when KV has no stored settings.
+   Changing provider or model does not require a redeploy.
+   Connecting Redis or adding a new API key still needs a one-time env deploy.
+6. **CDS Hooks registration: deferred to its own phase** (phase 2, section 14). Registering with Epic and Cerner is a per-vendor developer-portal process, separate from the SMART app registration already in place for read access.
+7. **Regulatory posture: MVP / synthetic-data only** for now. Software that suggests a specific alternate drug sits near the FDA's line for regulated Clinical Decision Support under the 21st Century Cures Act CDS exemption (which broadly requires the clinician be able to independently review the basis for a recommendation). The whole design leans on "explain the rationale, cite evidence, physician confirms independently, no auto-apply" to stay on the right side of that line, but a real regulatory/legal read is required **before** any production use with real patients. Not solved here, deliberately deferred.
+8. **In-app ordering: in scope.** The physician will eventually place orders from inside this app; this reopens the PRD's "no clinical writes" non-goal for MedicationRequest only (section 2).
 
 ### Remaining open questions
 
 - **Write scopes for in-app ordering.** Placing a MedicationRequest from our app needs `patient/MedicationRequest.write` (or `user/...write`) added to the Epic/Cerner SMART registration and sandbox app config, which today request read scopes only. This is a registration/config change to schedule, not a blocker for the read-only Journeys A and C.
-- **Which concrete LLM to run first.** The interface is pluggable (Vercel AI SDK), but we still need to pick a default model to develop and demo against. Even on synthetic data this affects latency and cost.
+- **Which concrete LLM to run first.** The interface is pluggable (Vercel AI SDK) with request-time KV selection.
+  Current demo default in KV is Gemini (`gemini-3.5-flash`); swap via `/api/agent/llm-settings` without redeploy.
+  Cost/latency tradeoffs may still change which default we prefer for demos.
 - **Guideline corpus contents.** Which specific guideline documents (ADA, AHA/ACC, JNC, etc.) we ingest for the condition-control reasoning, and their licensing/redistribution terms.
 
 ## 11. Agentic stack

@@ -185,6 +185,7 @@ Include:
 
 ## Related docs
 
+- [AGENT_SPEC.md](./AGENT_SPEC.md) - agent architecture; LLM provider/model is request-time KV config (sections 10-11)
 - [vercel_readme.md](./vercel_readme.md) - deployment, env vars, developer setup
 - [RELEASES.md](./RELEASES.md) - v1.0.0 release index
 - [DEPLOYMENT.md](./DEPLOYMENT.md) - local + Vercel overview
