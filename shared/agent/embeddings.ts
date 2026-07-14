@@ -1,9 +1,9 @@
 /**
  * Embedding helper for GraphRAG chunks.
  * Locked to OpenAI text-embedding-3-small (1536-dim) for stable pgvector schema.
+ * Uses dynamic import() of `ai` so Vercel CJS serverless wrappers do not hit
+ * ERR_REQUIRE_ESM when loading unrelated agent routes (e.g. review).
  */
-
-import { embed, embedMany } from "ai";
 
 export const EMBEDDING_MODEL_ID = "text-embedding-3-small";
 export const EMBEDDING_DIMENSIONS = 1536;
@@ -26,6 +26,7 @@ export async function embedText(
   text: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<number[]> {
+  const { embed } = await import("ai");
   const model = await openAiEmbeddingModel(env);
   const { embedding } = await embed({ model, value: text });
   return embedding;
@@ -36,6 +37,7 @@ export async function embedTexts(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
+  const { embedMany } = await import("ai");
   const model = await openAiEmbeddingModel(env);
   const { embeddings } = await embedMany({ model, values: texts });
   return embeddings;

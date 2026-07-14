@@ -1,23 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getResolvedConnection } from "../../shared/vercel-resolve-fhir-connection.js";
-import { runPatientAsk } from "../../shared/agent/ask.js";
 import { isAgentEnabledSource } from "../../shared/agent/fhir-reader.js";
-import { resolveLlmProvider } from "../../shared/agent/llm.js";
-import {
-  authorizeSettingsWrite,
-  isKvConfigured,
-  loadLlmSettings,
-  normalizeLlmSettingsInput,
-  resolveEffectiveLlmSettings,
-  saveLlmSettings,
-} from "../../shared/agent/llm-settings.js";
 import { runConditionReview } from "../../shared/agent/review.js";
-import { runInteractionCheck } from "../../shared/agent/interaction-check.js";
-import { isGraphDbConfigured } from "../../shared/agent/db.js";
-import { canEmbed } from "../../shared/agent/embeddings.js";
-import { getPatientSyncMeta, syncPatientGraph } from "../../shared/agent/graph-sync.js";
-import { assessConditionControl } from "../../shared/agent/condition-control.js";
-import { fetchPatientClinicalData } from "../../shared/agent/fhir-reader.js";
 
 function actionFromRequest(req: VercelRequest): string {
   const queryAction = req.query.action;
@@ -124,7 +108,12 @@ async function handleAsk(req: VercelRequest, res: VercelResponse): Promise<void>
     return;
   }
 
-  const result = await runPatientAsk(connection, patientId, question, process.env);
+  const result = await (await import("../../shared/agent/ask.js")).runPatientAsk(
+    connection,
+    patientId,
+    question,
+    process.env,
+  );
   res.setHeader("Cache-Control", "no-store");
   res.status(200).json(result);
 }
@@ -134,6 +123,15 @@ async function handleLlmSettings(
   res: VercelResponse,
 ): Promise<void> {
   res.setHeader("Cache-Control", "no-store");
+  const { resolveLlmProvider } = await import("../../shared/agent/llm.js");
+  const {
+    authorizeSettingsWrite,
+    isKvConfigured,
+    loadLlmSettings,
+    normalizeLlmSettingsInput,
+    resolveEffectiveLlmSettings,
+    saveLlmSettings,
+  } = await import("../../shared/agent/llm-settings.js");
 
   if (req.method === "GET") {
     const effective = await resolveEffectiveLlmSettings(
@@ -228,6 +226,9 @@ async function handleInteractionCheck(
     return;
   }
 
+  const { runInteractionCheck } = await import(
+    "../../shared/agent/interaction-check.js"
+  );
   const result = await runInteractionCheck(connection, patientId, {
     display: display || rxnormCode || "Unknown medication",
     rxnormCode,
@@ -263,6 +264,9 @@ async function handleGraphStatus(
   }
 
   if (req.method === "GET") {
+    const { isGraphDbConfigured } = await import("../../shared/agent/db.js");
+    const { canEmbed } = await import("../../shared/agent/embeddings.js");
+    const { getPatientSyncMeta } = await import("../../shared/agent/graph-sync.js");
     const meta = await getPatientSyncMeta(
       connection.sourceId,
       patientId,
@@ -285,6 +289,13 @@ async function handleGraphStatus(
   }
 
   if (req.method === "POST") {
+    const { fetchPatientClinicalData } = await import(
+      "../../shared/agent/fhir-reader.js"
+    );
+    const { assessConditionControl } = await import(
+      "../../shared/agent/condition-control.js"
+    );
+    const { syncPatientGraph } = await import("../../shared/agent/graph-sync.js");
     const clinical = await fetchPatientClinicalData(connection, patientId);
     const assessments = assessConditionControl(
       clinical.conditions,
